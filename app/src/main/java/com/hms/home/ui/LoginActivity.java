@@ -33,16 +33,17 @@ public class LoginActivity extends BaseActivity {
 
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
+        getWindow().setBackgroundDrawableResource(R.drawable.bg_home);
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(Ui.dp(this, 48), Ui.dp(this, 30), Ui.dp(this, 48), Ui.dp(this, 20));
-        root.addView(Ui.label(this, "IPTV Accounts", 30, R.color.white, true));
-        hint = Ui.label(this, "Xtream Codes  -  اضغط على حساب لفتحه أو تعديله", 14, R.color.secondary, false);
+        root.addView(Ui.label(this, "IPTV Accounts", 30, R.color.h_ink, true));
+        hint = Ui.label(this, "Xtream Codes  -  اضغط على حساب لفتحه أو تعديله", 14, R.color.h_ink2, false);
         hint.setPadding(0, 0, 0, Ui.dp(this, 10));
         root.addView(hint);
         RecyclerView rv = new RecyclerView(this);
         rv.setLayoutManager(new LinearLayoutManager(this));
-        ad = new TextAdapter(false, new TextAdapter.Listener() {
+        ad = new TextAdapter(false, true, new TextAdapter.Listener() {
             @Override public void click(TextAdapter.Row r, int pos) {
                 if (r.data instanceof Account) accountMenu((Account) r.data); else addChooser();
             }
@@ -71,7 +72,7 @@ public class LoginActivity extends BaseActivity {
 
     private void accountMenu(final Account a) {
         String[] items = {"Use this account", "Edit", "Delete"};
-        new AlertDialog.Builder(this).setTitle(a.name).setItems(items, new DialogInterface.OnClickListener() {
+        new AlertDialog.Builder(this, R.style.HmsDialog).setTitle(a.name).setItems(items, new DialogInterface.OnClickListener() {
             @Override public void onClick(DialogInterface d, int w) {
                 if (w == 0) use(a);
                 else if (w == 1) showForm(a);
@@ -88,7 +89,7 @@ public class LoginActivity extends BaseActivity {
     }
 
     private void confirmDelete(final Account a) {
-        new AlertDialog.Builder(this).setTitle("Delete account").setMessage("متأكد إنك عايز تحذف \"" + a.name + "\"؟")
+        new AlertDialog.Builder(this, R.style.HmsDialog).setTitle("Delete account").setMessage("متأكد إنك عايز تحذف \"" + a.name + "\"؟")
                 .setPositiveButton("Delete", new DialogInterface.OnClickListener() {
                     @Override public void onClick(DialogInterface d, int w) {
                         Store.deleteAccount(a.id); Xtream.clearCache(); HomeActivity.invalidateMemo(); build();
@@ -121,13 +122,13 @@ public class LoginActivity extends BaseActivity {
         final EditText server = field(box, "Server URL  (http://host:port)", src == null ? "" : src.server, T | android.text.InputType.TYPE_TEXT_VARIATION_URI, false);
         final EditText user = field(box, "Username", src == null ? "" : src.user, T, false);
         final EditText pass = field(box, "Password", src == null ? "" : src.pass, T, true);
-        final TextView msg = Ui.label(this, "", 14, R.color.beige, false);
+        final TextView msg = Ui.label(this, "", 14, R.color.h_ink2, false);
         msg.setPadding(0, Ui.dp(this, 8), 0, 0);
         box.addView(msg);
         ScrollView sv = new ScrollView(this);
         sv.addView(box);
 
-        final AlertDialog dlg = new AlertDialog.Builder(this)
+        final AlertDialog dlg = new AlertDialog.Builder(this, R.style.HmsDialog)
                 .setTitle(existing == null ? "Add Xtream account" : "Edit account")
                 .setView(sv)
                 .setPositiveButton("Save", null)
@@ -178,7 +179,7 @@ public class LoginActivity extends BaseActivity {
 
     private void addChooser() {
         String[] items = {"الطريقة العادية - اكتب البيانات هنا", "باركود - ادخل البيانات من الموبايل"};
-        new AlertDialog.Builder(this).setTitle("Add account").setItems(items, new DialogInterface.OnClickListener() {
+        new AlertDialog.Builder(this, R.style.HmsDialog).setTitle("Add account").setItems(items, new DialogInterface.OnClickListener() {
             @Override public void onClick(DialogInterface d, int w) { if (w == 0) showForm(null); else showQr(); }
         }).show();
     }
@@ -215,16 +216,16 @@ public class LoginActivity extends BaseActivity {
         iv.setImageBitmap(qr);
         iv.setBackgroundColor(0xFFFFFFFF);
         box.addView(iv, new LinearLayout.LayoutParams(qr.getWidth(), qr.getHeight()));
-        TextView steps = Ui.label(this, "1) وصّل الموبايل بنفس شبكة الواي فاي بتاعة التيفي\n2) افتح كاميرا الموبايل وصوّر الباركود\n3) اكتب البيانات واضغط \"إرسال للتيفي\"", 15, R.color.white, false);
+        TextView steps = Ui.label(this, "1) وصّل الموبايل بنفس شبكة الواي فاي بتاعة التيفي\n2) افتح كاميرا الموبايل وصوّر الباركود\n3) اكتب البيانات واضغط \"إرسال للتيفي\"", 15, R.color.h_ink, false);
         steps.setPadding(0, Ui.dp(this, 10), 0, 0);
         box.addView(steps);
-        TextView link = Ui.label(this, url, 13, R.color.secondary, false);
+        TextView link = Ui.label(this, url, 13, R.color.h_ink2, false);
         link.setPadding(0, Ui.dp(this, 6), 0, 0);
         box.addView(link);
         ScrollView sv = new ScrollView(this);
         sv.addView(box);
 
-        qrDialog = new AlertDialog.Builder(this).setTitle("Scan with your phone").setView(sv)
+        qrDialog = new AlertDialog.Builder(this, R.style.HmsDialog).setTitle("Scan with your phone").setView(sv)
                 .setNegativeButton("Cancel", null)
                 .setOnDismissListener(new DialogInterface.OnDismissListener() {
                     @Override public void onDismiss(DialogInterface d) { if (pair == ps) { ps.stop(); pair = null; } }

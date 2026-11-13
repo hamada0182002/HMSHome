@@ -19,7 +19,7 @@ public final class AppMenu {
         o.add(fav ? "Remove from favorites" : "Add to favorites");
         if (fav) { o.add("Move earlier"); o.add("Move later"); }
         o.add("App info");
-        new AlertDialog.Builder(a).setTitle(app.label).setItems(o.toArray(new String[0]), new DialogInterface.OnClickListener() {
+        new AlertDialog.Builder(a, com.hms.home.R.style.HmsDialog).setTitle(app.label).setItems(o.toArray(new String[0]), new DialogInterface.OnClickListener() {
             @Override public void onClick(DialogInterface d, int w) {
                 String s = o.get(w);
                 if (s.startsWith("Add") || s.startsWith("Remove")) Store.toggleFavApp(app.pkg);

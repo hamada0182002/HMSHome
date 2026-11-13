@@ -22,9 +22,12 @@ public class TextAdapter extends RecyclerView.Adapter<TextAdapter.VH> {
     private List<Row> rows = new ArrayList<>();
     private final Listener l;
     private final boolean horizontal;
+    private final boolean light;
     private int selected = -1;
 
-    public TextAdapter(boolean horizontal, Listener l) { this.horizontal = horizontal; this.l = l; }
+    public TextAdapter(boolean horizontal, Listener l) { this(horizontal, false, l); }
+    /** light = true: same look as the home screen (light cards, dark text, blue focus ring). */
+    public TextAdapter(boolean horizontal, boolean light, Listener l) { this.horizontal = horizontal; this.light = light; this.l = l; }
 
     public void set(List<Row> r) { rows = r; notifyDataSetChanged(); }
     public Row get(int i) { return rows.get(i); }
@@ -46,14 +49,14 @@ public class TextAdapter extends RecyclerView.Adapter<TextAdapter.VH> {
         v.setOrientation(LinearLayout.VERTICAL);
         v.setPadding(Ui.dp(c, 14), Ui.dp(c, 9), Ui.dp(c, 14), Ui.dp(c, 9));
         v.setFocusable(true); v.setClickable(true);
-        v.setBackgroundResource(R.drawable.bg_card);
+        v.setBackgroundResource(light ? R.drawable.bg_row_l : R.drawable.bg_card);
         RecyclerView.LayoutParams lp = new RecyclerView.LayoutParams(horizontal ? ViewGroup.LayoutParams.WRAP_CONTENT : ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         lp.setMargins(Ui.dp(c, 3), Ui.dp(c, 3), Ui.dp(c, 3), Ui.dp(c, 3));
         v.setLayoutParams(lp);
-        TextView t = Ui.label(c, "", 16, R.color.white, false);
+        TextView t = Ui.label(c, "", 16, light ? R.color.h_ink : R.color.white, false);
         t.setSingleLine(true);
         t.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        TextView s = Ui.label(c, "", 12, R.color.secondary, false);
+        TextView s = Ui.label(c, "", 12, light ? R.color.h_ink2 : R.color.secondary, false);
         s.setSingleLine(true);
         v.addView(t); v.addView(s);
         return new VH(v, t, s);
@@ -62,7 +65,7 @@ public class TextAdapter extends RecyclerView.Adapter<TextAdapter.VH> {
     @Override public void onBindViewHolder(VH vh, int pos) {
         Row r = rows.get(pos);
         vh.t.setText(r.text);
-        vh.t.setTextColor(ContextCompat.getColor(vh.t.getContext(), pos == selected ? R.color.bronze : R.color.white));
+        vh.t.setTextColor(ContextCompat.getColor(vh.t.getContext(), pos == selected ? (light ? R.color.h_accent : R.color.bronze) : (light ? R.color.h_ink : R.color.white)));
         boolean has = r.sub != null && !r.sub.isEmpty();
         vh.s.setText(has ? r.sub : "");
         vh.s.setVisibility(has ? View.VISIBLE : View.GONE);

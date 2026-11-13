@@ -29,14 +29,15 @@ public class SettingsActivity extends BaseActivity {
 
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
+        getWindow().setBackgroundDrawableResource(R.drawable.bg_home);
         android.widget.LinearLayout root = new android.widget.LinearLayout(this);
         root.setOrientation(android.widget.LinearLayout.VERTICAL);
         root.setPadding(Ui.dp(this, 48), Ui.dp(this, 30), Ui.dp(this, 48), Ui.dp(this, 20));
-        TextView title = Ui.label(this, "Settings", 30, R.color.white, true);
+        TextView title = Ui.label(this, "Settings", 30, R.color.h_ink, true);
         root.addView(title);
         RecyclerView rv = new RecyclerView(this);
         rv.setLayoutManager(new LinearLayoutManager(this));
-        ad = new TextAdapter(false, new TextAdapter.Listener() {
+        ad = new TextAdapter(false, true, new TextAdapter.Listener() {
             @Override public void click(TextAdapter.Row r, int pos) { act((String) r.data); }
             @Override public void focus(TextAdapter.Row r, int pos) { }
         });
@@ -79,7 +80,7 @@ public class SettingsActivity extends BaseActivity {
             case "subs": Store.setSubsDefault(!Store.subsDefault()); build(); break;
             case "apps": startActivity(new Intent(this, AppsActivity.class)); break;
             case "clearfav":
-                new AlertDialog.Builder(this).setTitle("Clear all favorites?").setPositiveButton("Clear", new DialogInterface.OnClickListener() {
+                new AlertDialog.Builder(this, R.style.HmsDialog).setTitle("Clear all favorites?").setPositiveButton("Clear", new DialogInterface.OnClickListener() {
                     @Override public void onClick(DialogInterface d, int w) { Store.clearFavApps(); Store.clearFavItems(); toast("تم المسح"); }
                 }).setNegativeButton("Cancel", null).show();
                 break;
@@ -107,7 +108,7 @@ public class SettingsActivity extends BaseActivity {
                 String[] names = new String[cats.size() + 1];
                 names[0] = "Latest added (automatic)";
                 for (int i = 0; i < cats.size(); i++) names[i + 1] = cats.get(i).name;
-                new AlertDialog.Builder(SettingsActivity.this)
+                new AlertDialog.Builder(SettingsActivity.this, R.style.HmsDialog)
                         .setTitle(type.equals("movie") ? "Home: new movies from" : "Home: new series from")
                         .setItems(names, new DialogInterface.OnClickListener() {
                             @Override public void onClick(DialogInterface d, int w) {
@@ -124,7 +125,7 @@ public class SettingsActivity extends BaseActivity {
     }
 
     private void showMsg(String title, String msg) {
-        new AlertDialog.Builder(this).setTitle(title).setMessage(msg).setPositiveButton("OK", null).show();
+        new AlertDialog.Builder(this, R.style.HmsDialog).setTitle(title).setMessage(msg).setPositiveButton("OK", null).show();
     }
 
     private void checkUpdate() {
@@ -143,7 +144,7 @@ public class SettingsActivity extends BaseActivity {
 
     private void askInstall(final Updater.Info info) {
         String notes = info.notes.isEmpty() ? "" : "\n\n" + (info.notes.length() > 400 ? info.notes.substring(0, 400) + "…" : info.notes);
-        new AlertDialog.Builder(this)
+        new AlertDialog.Builder(this, R.style.HmsDialog)
                 .setTitle("New version " + info.version)
                 .setMessage("You have " + BuildConfig.VERSION_NAME + ". Download and install " + info.version + " now?" + notes)
                 .setPositiveButton("Update", new DialogInterface.OnClickListener() {
@@ -156,8 +157,9 @@ public class SettingsActivity extends BaseActivity {
         final TextView pt = new TextView(this);
         pt.setPadding(Ui.dp(this, 24), Ui.dp(this, 16), Ui.dp(this, 24), Ui.dp(this, 16));
         pt.setTextSize(18);
+        pt.setTextColor(androidx.core.content.ContextCompat.getColor(this, R.color.h_ink));
         pt.setText("Downloading… 0%");
-        final AlertDialog pd = new AlertDialog.Builder(this).setTitle("Updating").setView(pt).setCancelable(false).create();
+        final AlertDialog pd = new AlertDialog.Builder(this, R.style.HmsDialog).setTitle("Updating").setView(pt).setCancelable(false).create();
         pd.show();
         run(new Callable<File>() {
             @Override public File call() throws Exception {

@@ -12,4 +12,14 @@
         <item name="android:textColorSecondary">@color/secondary</item>
         <item name="android:textColorHint">@color/secondary</item>
     </style>
+    <!-- light dialogs that match the home look -->
+    <style name="HmsDialog" parent="android:Theme.Material.Light.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/bg_dialog_l</item>
+        <item name="android:colorAccent">@color/h_accent</item>
+        <item name="android:colorControlActivated">@color/h_accent</item>
+        <item name="android:textColorPrimary">@color/h_ink</item>
+        <item name="android:textColorSecondary">@color/h_ink2</item>
+        <item name="android:textColorHint">@color/h_ink2</item>
+        <item name="android:windowFullscreen">false</item>
+    </style>
 </resources>
