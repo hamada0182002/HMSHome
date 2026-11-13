@@ -103,8 +103,8 @@ public class QuranActivity extends BaseActivity {
         t.setPadding(Ui.dp(this, 20), Ui.dp(this, 10), Ui.dp(this, 20), Ui.dp(this, 10));
         t.setFocusable(true);
         t.setClickable(true);
-        t.setBackgroundResource(R.drawable.bg_row_l);
-        t.setTextColor(ContextCompat.getColor(this, R.color.h_ink));
+        t.setBackgroundResource(R.drawable.bg_button);
+        t.setTextColor(ContextCompat.getColorStateList(this, R.color.btn_text));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, -2);
         lp.setMargins(Ui.dp(this, 5), Ui.dp(this, 4), Ui.dp(this, 5), Ui.dp(this, 4));
         t.setLayoutParams(lp);
@@ -123,7 +123,7 @@ public class QuranActivity extends BaseActivity {
     private LinearLayout column(String label, RecyclerView rv, TextView[] labelOut) {
         LinearLayout col = new LinearLayout(this);
         col.setOrientation(LinearLayout.VERTICAL);
-        TextView t = Ui.label(this, label, 17, R.color.h_ink2, true);
+        TextView t = Ui.label(this, label, 17, R.color.d_ink2, true);
         t.setPadding(Ui.dp(this, 6), 0, 0, Ui.dp(this, 2));
         col.addView(t, new LinearLayout.LayoutParams(-1, -2));
         col.addView(rv, new LinearLayout.LayoutParams(-1, 0, 1f));
@@ -134,7 +134,7 @@ public class QuranActivity extends BaseActivity {
     // ---------------- screen ----------------
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
-        getWindow().setBackgroundDrawableResource(R.drawable.bg_home);
+        getWindow().setBackgroundDrawableResource(R.drawable.bg_home_dark);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         sp = getSharedPreferences("quran", Context.MODE_PRIVATE);
 
@@ -146,9 +146,9 @@ public class QuranActivity extends BaseActivity {
         // title row
         LinearLayout head = new LinearLayout(this);
         head.setGravity(Gravity.CENTER_VERTICAL);
-        TextView title = Ui.label(this, "القرآن الكريم", 28, R.color.h_ink, true);
+        TextView title = Ui.label(this, "القرآن الكريم", 28, R.color.white, true);
         head.addView(title, new LinearLayout.LayoutParams(-2, -2));
-        status = Ui.label(this, "", 15, R.color.h_ink2, false);
+        status = Ui.label(this, "", 15, R.color.d_ink2, false);
         status.setGravity(Gravity.END);
         status.setPadding(Ui.dp(this, 16), 0, 0, 0);
         head.addView(status, new LinearLayout.LayoutParams(0, -2, 1f));
@@ -162,11 +162,11 @@ public class QuranActivity extends BaseActivity {
         playerCard.setVisibility(View.GONE);
 
         // two columns: reciters | surahs
-        recAd = new TextAdapter(false, true, new TextAdapter.Listener() {
+        recAd = new TextAdapter(false, false, new TextAdapter.Listener() {
             @Override public void click(TextAdapter.Row r, int pos) { onReciter(r); }
             @Override public void focus(TextAdapter.Row r, int pos) { }
         });
-        surAd = new TextAdapter(false, true, new TextAdapter.Listener() {
+        surAd = new TextAdapter(false, false, new TextAdapter.Listener() {
             @Override public void click(TextAdapter.Row r, int pos) {
                 if (r.data instanceof Integer && curRec != null) play(curRec, (Integer) r.data, 0);
             }
@@ -205,8 +205,8 @@ public class QuranActivity extends BaseActivity {
 
         LinearLayout top = new LinearLayout(this);
         top.setGravity(Gravity.CENTER_VERTICAL);
-        nowName = Ui.label(this, "", 24, R.color.h_ink, true);
-        nowSub = Ui.label(this, "", 16, R.color.h_ink2, false);
+        nowName = Ui.label(this, "", 24, R.color.white, true);
+        nowSub = Ui.label(this, "", 16, R.color.d_ink2, false);
         nowSub.setPadding(Ui.dp(this, 16), 0, 0, 0);
         top.addView(nowName, new LinearLayout.LayoutParams(-2, -2));
         top.addView(nowSub, new LinearLayout.LayoutParams(-2, -2));
@@ -214,11 +214,11 @@ public class QuranActivity extends BaseActivity {
 
         LinearLayout prog = new LinearLayout(this);
         prog.setGravity(Gravity.CENTER_VERTICAL);
-        tCur = Ui.label(this, "00:00", 14, R.color.h_ink2, false);
-        tDur = Ui.label(this, "00:00", 14, R.color.h_ink2, false);
+        tCur = Ui.label(this, "00:00", 14, R.color.d_ink2, false);
+        tDur = Ui.label(this, "00:00", 14, R.color.d_ink2, false);
         bar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
         bar.setMax(1000);
-        bar.getProgressDrawable().setColorFilter(ContextCompat.getColor(this, R.color.h_accent), android.graphics.PorterDuff.Mode.SRC_IN);
+        bar.getProgressDrawable().setColorFilter(ContextCompat.getColor(this, R.color.h_yellow), android.graphics.PorterDuff.Mode.SRC_IN);
         prog.addView(tCur, new LinearLayout.LayoutParams(-2, -2));
         LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(0, Ui.dp(this, 8), 1f);
         bl.setMargins(Ui.dp(this, 12), 0, Ui.dp(this, 12), 0);

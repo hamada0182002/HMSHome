@@ -20,4 +20,8 @@
     <color name="h_ink2">#566074</color>
     <color name="h_accent">#1F7AF5</color>
     <color name="h_bar">#80FFFFFF</color>
+    <!-- dark playbox-style home -->
+    <color name="h_yellow">#FFC21A</color>
+    <color name="d_base">#0B171C</color>
+    <color name="d_ink2">#9FB3BB</color>
 </resources>

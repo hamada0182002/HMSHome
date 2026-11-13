@@ -85,6 +85,32 @@ public final class ImageLoader {
         });
     }
 
+    /**
+     * Big blurred background picture: no placeholder flash. The picture is shrunk to a few dozen pixels,
+     * so it looks soft / out of focus when the ImageView stretches it over the screen.
+     */
+    public static void loadSoft(final ImageView v, final String url, final Runnable done) {
+        final String key = url + "|soft";
+        v.setTag(key);
+        if (url == null || !url.startsWith("http")) return;
+        Bitmap b = mem.get(key);
+        if (b != null) { v.setImageBitmap(b); if (done != null) done.run(); return; }
+        EX.execute(new Runnable() {
+            @Override public void run() {
+                if (!key.equals(v.getTag())) return;
+                Bitmap bm = fetch(url, 480, 270, true);
+                if (bm == null) return;
+                final Bitmap soft = Bitmap.createScaledBitmap(bm, Math.max(24, bm.getWidth() / 6), Math.max(14, bm.getHeight() / 6), true);
+                mem.put(key, soft);
+                H.post(new Runnable() { @Override public void run() {
+                    if (!key.equals(v.getTag())) return;
+                    v.setImageBitmap(soft);
+                    if (done != null) done.run();
+                } });
+            }
+        });
+    }
+
     private static Bitmap fetch(String url, int w, int h, boolean hq) {
         try {
             File f = new File(dir, hash(url));

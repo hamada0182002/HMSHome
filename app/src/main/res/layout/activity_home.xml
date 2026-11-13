@@ -1,36 +1,65 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent" android:layout_height="match_parent"
-    android:orientation="vertical" android:clipChildren="false">
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent" android:clipChildren="false">
 
-    <!-- top bar: clock + Wi-Fi + device settings + HMS settings (right side, like the design) -->
-    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:orientation="horizontal" android:gravity="center_vertical|end"
-        android:paddingLeft="48dp" android:paddingRight="40dp" android:paddingTop="14dp" android:paddingBottom="2dp">
-        <TextClock android:id="@+id/date" android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:format12Hour="EEE d MMM" android:format24Hour="EEE d MMM"
-            android:textColor="@color/h_ink2" android:textSize="16sp" android:layout_marginRight="14dp"/>
-        <TextClock android:id="@+id/clock" android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:format12Hour="h:mm" android:format24Hour="HH:mm"
-            android:textColor="@color/h_ink2" android:textSize="18sp" android:textStyle="bold"
-            android:layout_marginRight="10dp"/>
-        <ImageView android:id="@+id/icUsb" android:layout_width="30dp" android:layout_height="30dp"
-            android:padding="3dp" android:src="@drawable/ic_usb" android:visibility="gone"
-            android:layout_marginRight="8dp" android:contentDescription="USB drive"/>
-        <ImageView android:id="@+id/btnWifi" android:layout_width="44dp" android:layout_height="44dp"
-            android:padding="11dp" android:src="@drawable/ic_wifi" android:focusable="true" android:clickable="true"
-            android:background="@drawable/bg_status_btn" android:contentDescription="Wi-Fi"/>
-        <ImageView android:id="@+id/btnDevice" android:layout_width="44dp" android:layout_height="44dp"
-            android:padding="11dp" android:src="@drawable/ic_settings" android:focusable="true" android:clickable="true"
-            android:background="@drawable/bg_status_btn" android:contentDescription="Device settings"/>
-        <ImageView android:id="@+id/btnApp" android:layout_width="44dp" android:layout_height="44dp"
-            android:padding="11dp" android:src="@drawable/ic_tune" android:focusable="true" android:clickable="true"
-            android:background="@drawable/bg_status_btn" android:contentDescription="HMS HOME settings"/>
+    <!-- big blurred picture behind everything; its edges fade into the background (fades are added in code) -->
+    <FrameLayout android:id="@+id/backdropBox" android:layout_width="match_parent" android:layout_height="match_parent">
+        <ImageView android:id="@+id/backdrop" android:layout_width="match_parent" android:layout_height="match_parent"
+            android:scaleType="centerCrop" android:alpha="0" android:importantForAccessibility="no"/>
+    </FrameLayout>
+
+    <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent"
+        android:orientation="vertical" android:clipChildren="false">
+
+        <!-- top bar: date + big clock + weather (left of the buttons), USB, Wi-Fi, device settings, HMS settings -->
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal" android:gravity="center_vertical|end"
+            android:paddingLeft="48dp" android:paddingRight="40dp" android:paddingTop="14dp" android:paddingBottom="2dp">
+            <TextClock android:id="@+id/date" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:format12Hour="EEE d MMM" android:format24Hour="EEE d MMM"
+                android:textColor="@color/d_ink2" android:textSize="18sp" android:layout_marginRight="18dp"/>
+            <TextClock android:id="@+id/clock" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:format12Hour="h:mm" android:format24Hour="HH:mm"
+                android:textColor="@color/white" android:textSize="38sp" android:textStyle="bold"/>
+            <TextClock android:id="@+id/ampm" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:format12Hour="a" android:format24Hour="a"
+                android:textColor="@color/d_ink2" android:textSize="18sp" android:layout_marginLeft="6dp"/>
+            <View android:id="@+id/wDivider" android:layout_width="1dp" android:layout_height="40dp"
+                android:background="#40FFFFFF" android:layout_marginLeft="22dp" android:layout_marginRight="22dp" android:visibility="gone"/>
+            <LinearLayout android:id="@+id/weatherBox" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical" android:visibility="gone">
+                <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="vertical">
+                    <TextView android:id="@+id/wCity" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:textColor="@color/white" android:textSize="22sp" android:singleLine="true" android:maxWidth="220dp" android:ellipsize="end"/>
+                    <TextView android:id="@+id/wHum" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:textColor="@color/d_ink2" android:textSize="13sp"/>
+                </LinearLayout>
+                <ImageView android:id="@+id/wIcon" android:layout_width="46dp" android:layout_height="46dp"
+                    android:layout_marginLeft="12dp" android:importantForAccessibility="no"/>
+                <TextView android:id="@+id/wTemp" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:layout_marginLeft="4dp" android:textColor="@color/white" android:textSize="30sp"/>
+            </LinearLayout>
+            <ImageView android:id="@+id/icUsb" android:layout_width="30dp" android:layout_height="30dp"
+                android:padding="3dp" android:src="@drawable/ic_usb" android:visibility="gone"
+                android:layout_marginLeft="22dp" android:layout_marginRight="8dp" android:contentDescription="USB drive"/>
+            <ImageView android:id="@+id/btnWifi" android:layout_width="48dp" android:layout_height="48dp"
+                android:layout_marginLeft="22dp"
+                android:padding="12dp" android:src="@drawable/ic_wifi" android:focusable="true" android:clickable="true"
+                android:background="@drawable/bg_status_btn" android:contentDescription="Wi-Fi"/>
+            <ImageView android:id="@+id/btnDevice" android:layout_width="48dp" android:layout_height="48dp"
+                android:layout_marginLeft="4dp"
+                android:padding="12dp" android:src="@drawable/ic_settings" android:focusable="true" android:clickable="true"
+                android:background="@drawable/bg_status_btn" android:contentDescription="Device settings"/>
+            <ImageView android:id="@+id/btnApp" android:layout_width="48dp" android:layout_height="48dp"
+                android:layout_marginLeft="4dp"
+                android:padding="12dp" android:src="@drawable/ic_tune" android:focusable="true" android:clickable="true"
+                android:background="@drawable/bg_status_btn" android:contentDescription="HMS HOME settings"/>
+        </LinearLayout>
+
+        <ScrollView android:id="@+id/scroll" android:layout_width="match_parent" android:layout_height="match_parent"
+            android:fillViewport="true" android:scrollbars="none" android:clipChildren="false">
+            <LinearLayout android:id="@+id/rows" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="vertical" android:clipChildren="false" android:paddingBottom="40dp"/>
+        </ScrollView>
     </LinearLayout>
-
-    <ScrollView android:id="@+id/scroll" android:layout_width="match_parent" android:layout_height="match_parent"
-        android:fillViewport="true" android:scrollbars="none" android:clipChildren="false">
-        <LinearLayout android:id="@+id/rows" android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:orientation="vertical" android:clipChildren="false" android:paddingBottom="40dp"/>
-    </ScrollView>
-</LinearLayout>
+</FrameLayout>

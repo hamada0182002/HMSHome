@@ -8,6 +8,9 @@ import android.os.Bundle;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewTreeObserver;
+import android.widget.FrameLayout;
+import android.widget.ScrollView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -16,6 +19,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import com.hms.home.R;
 import com.hms.home.data.AppsManager;
+import com.hms.home.data.ImageLoader;
 import com.hms.home.data.Item;
 import com.hms.home.data.Net;
 import com.hms.home.data.Store;
@@ -25,9 +29,10 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * The launcher home (light Google-TV-like look):
- *  top bar (clock, Wi-Fi, device settings, HMS settings) -> Live / Movies / Series / Quran (centered) -> favorite apps dock (centered)
- *  -> continue watching -> new movies -> new series -> favorite channels.
+ * The launcher home (dark, glass-card look):
+ *  top bar (date, big clock, weather, Wi-Fi, device settings, HMS settings)
+ *  -> Live / Movies / Series / Quran glass cards (a big blurred picture fades in behind while one has the cursor)
+ *  -> favorite apps dock -> continue watching -> new movies -> new series -> favorite channels.
  */
 public class HomeActivity extends BaseActivity {
     private LinearLayout rows;
@@ -35,8 +40,15 @@ public class HomeActivity extends BaseActivity {
     private RecyclerView appsRv, shortcutsRv;
     private final java.util.Map<RecyclerView, Integer> lastPos = new java.util.HashMap<>();
     private boolean opening;
-    private ImageView btnWifi, icUsb;
-    private final int tintBase = Color.parseColor("#4A5468");
+    private ImageView btnWifi, icUsb, backdrop, wIcon;
+    private ScrollView scroll;
+    private View wBox, wDivider;
+    private TextView wCity, wHum, wTemp;
+    private List<CardAdapter.Card> sc;
+    private CardAdapter.Card movieCard, seriesCard;
+    private String curKey = "live", shownKey;
+    private boolean inShortcuts;
+    private static final float BACKDROP_ALPHA = 0.6f;
 
     /** Wi-Fi icon: faded when there is no connection, clear when connected. USB icon: only while a flash drive is mounted. */
     private void updateStatus() {
@@ -67,6 +79,8 @@ public class HomeActivity extends BaseActivity {
     private boolean receiverOn;
     private static List<Item> mMovies, mSeries;
     private static long memoAt;
+    /** movie id -> wide backdrop url (from get_vod_info); a poster is small and looks bad stretched over the screen. */
+    private static final java.util.Map<String, String> backdrops = new java.util.HashMap<>();
 
     public static void invalidateMemo() { mMovies = null; mSeries = null; memoAt = 0; }
 
@@ -84,6 +98,13 @@ public class HomeActivity extends BaseActivity {
                 Item it = (Item) d;
                 if (k.sub != null && k.sub.startsWith("Resume")) Nav.resume(HomeActivity.this, it); else Nav.open(HomeActivity.this, it);
             } else if (d instanceof String) Nav.section(HomeActivity.this, (String) d);
+        }
+        @Override public void focus(CardAdapter.Card k) {
+            if (!(k.data instanceof String)) return;
+            String key = (String) k.data;
+            if (!key.equals("live") && !key.equals("movie") && !key.equals("series") && !key.equals("quran")) return;
+            curKey = key; inShortcuts = true;
+            showBackdrop(key);
         }
         @Override public void menu(CardAdapter.Card k) {
             if (k.data instanceof AppsManager.App) AppMenu.show(HomeActivity.this, (AppsManager.App) k.data, new Runnable() { @Override public void run() { refresh(); } });
@@ -184,6 +205,7 @@ public class HomeActivity extends BaseActivity {
     }
 
     private void goRow(RecyclerView r) {
+        if (r == shortcutsRv && scroll != null) scroll.smoothScrollTo(0, 0);
         Integer p = lastPos.get(r);
         FocusNav.focusPos(r, p == null ? 0 : p);
     }
@@ -205,49 +227,60 @@ public class HomeActivity extends BaseActivity {
         rv.setClipChildren(false);
         rv.setClipToPadding(false);
         rv.setPadding(Ui.dp(this, 8), Ui.dp(this, 10), Ui.dp(this, 8), Ui.dp(this, 10));
+        rv.setItemAnimator(null);
         rv.setLayoutManager(new LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false));
         rv.setAdapter(ad);
         return rv;
     }
 
     private TextView sectionTitle(String t) {
-        TextView tv = Ui.label(this, t, 20, R.color.h_ink, true);
+        TextView tv = Ui.label(this, t, 20, R.color.white, true);
         tv.setPadding(Ui.dp(this, 56), Ui.dp(this, 10), 0, Ui.dp(this, 0));
         return tv;
     }
 
     private void bindIcon(int id, final Runnable r, int tint) {
         ImageView v = findViewById(id);
-        v.setColorFilter(tint);
+        v.setImageTintList(new android.content.res.ColorStateList(
+                new int[][]{{android.R.attr.state_focused}, {}}, new int[]{0xFF1B1F2A, 0xFFFFFFFF}));
         v.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View x) { r.run(); } });
     }
 
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
-        getWindow().setBackgroundDrawableResource(R.drawable.bg_home);
+        getWindow().setBackgroundDrawableResource(R.drawable.bg_home_dark);
         setContentView(R.layout.activity_home);
         rows = findViewById(R.id.rows);
+        scroll = findViewById(R.id.scroll);
+        backdrop = findViewById(R.id.backdrop);
+        wBox = findViewById(R.id.weatherBox); wDivider = findViewById(R.id.wDivider);
+        wCity = findViewById(R.id.wCity); wHum = findViewById(R.id.wHum); wTemp = findViewById(R.id.wTemp); wIcon = findViewById(R.id.wIcon);
+        if (android.text.format.DateFormat.is24HourFormat(this)) findViewById(R.id.ampm).setVisibility(View.GONE);
+        setupBackdropFades();
 
-        int tint = tintBase;
+        int tint = 0;
         btnWifi = findViewById(R.id.btnWifi);
         icUsb = findViewById(R.id.icUsb);
-        icUsb.setColorFilter(tint);
+        icUsb.setColorFilter(0xFFFFFFFF);
         bindIcon(R.id.btnWifi, new Runnable() { @Override public void run() { Nav.wifiSettings(HomeActivity.this); } }, tint);
         bindIcon(R.id.btnDevice, new Runnable() { @Override public void run() { Nav.deviceSettings(HomeActivity.this); } }, tint);   // Android settings
         bindIcon(R.id.btnApp, new Runnable() { @Override public void run() { Nav.section(HomeActivity.this, "settings"); } }, tint);  // HMS HOME settings
 
-        // 1) Live / Movies / Series / Quran: cards side by side, centered, all visible without scrolling
+        // 1) Live / Movies / Series / Quran: glass cards side by side, centered, lower-middle of the screen
+        //    (the space above is where the big blurred picture shows)
+        rows.addView(new View(this), new LinearLayout.LayoutParams(-1, Math.round(Ui.sh(this) * 0.25f)));
         shortcuts = new CardAdapter(CardAdapter.SHORTCUT, cl);
         shortcutsRv = centeredList(shortcuts);
         LinearLayout.LayoutParams scp = new LinearLayout.LayoutParams(-2, -2);
         scp.gravity = android.view.Gravity.CENTER_HORIZONTAL;
-        scp.topMargin = Ui.dp(this, 8);
         rows.addView(shortcutsRv, scp);
-        List<CardAdapter.Card> sc = new ArrayList<>();
-        sc.add(new CardAdapter.Card("Live", "live").vec(R.drawable.ic_tv).colors(0xFF5B5CE6, 0xFF8E54E9));
-        sc.add(new CardAdapter.Card("Movies", "movie").vec(R.drawable.ic_movie).colors(0xFFE5484D, 0xFFF2994A));
-        sc.add(new CardAdapter.Card("Series", "series").vec(R.drawable.ic_series).colors(0xFF0E9F8E, 0xFF38C172));
-        sc.add(new CardAdapter.Card("Quran", "quran").vec(R.drawable.ic_quran).colors(0xFF8A6A1F, 0xFFD2A93C));
+        sc = new ArrayList<>();
+        sc.add(new CardAdapter.Card("Live", "live").vec(R.drawable.ic_hm_tv).sub("Live TV channels"));
+        movieCard = new CardAdapter.Card("Movies", "movie").vec(R.drawable.ic_hm_movie).sub("Latest movies");
+        seriesCard = new CardAdapter.Card("Series", "series").vec(R.drawable.ic_hm_series).sub("Latest series");
+        sc.add(movieCard);
+        sc.add(seriesCard);
+        sc.add(new CardAdapter.Card("Quran", "quran").vec(R.drawable.ic_hm_quran).sub("Holy Quran"));
         shortcuts.set(sc);
         FocusNav.focusPos(shortcutsRv, 0);
 
@@ -261,14 +294,14 @@ public class HomeActivity extends BaseActivity {
         bar.setGravity(android.view.Gravity.CENTER_HORIZONTAL);
         bar.addView(appsRv, new LinearLayout.LayoutParams(-2, -2));
         LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(-1, -2);
-        bp.setMargins(Ui.dp(this, 48), Ui.dp(this, 6), Ui.dp(this, 48), Ui.dp(this, 6));
+        bp.setMargins(Ui.dp(this, 48), Ui.dp(this, 14), Ui.dp(this, 48), Ui.dp(this, 6));
         rows.addView(bar, bp);
 
         // 3) poster rows: continue watching, new movies, new series (normal size)
-        tCont = new TileAdapter(140, 210, false, true, tl);
-        tMovies = new TileAdapter(140, 210, false, true, tl);
-        tSeries = new TileAdapter(140, 210, false, true, tl);
-        tFav = new TileAdapter(190, 110, true, true, tl);
+        tCont = new TileAdapter(140, 210, false, false, tl);
+        tMovies = new TileAdapter(140, 210, false, false, tl);
+        tSeries = new TileAdapter(140, 210, false, false, tl);
+        tFav = new TileAdapter(190, 110, true, false, tl);
 
         tContT = sectionTitle("Continue watching"); rCont = horizontalList(tCont, 48);
         tMoviesT = sectionTitle("New movies"); rMovies = horizontalList(tMovies, 48);
@@ -286,6 +319,133 @@ public class HomeActivity extends BaseActivity {
         rows.addView(rFav, new LinearLayout.LayoutParams(-1, -2));
         tFavT.setVisibility(View.GONE); rFav.setVisibility(View.GONE);
         titled.add(new View[]{tFavT, rFav});
+
+        // the big picture only shows while the cursor is on one of the shortcut cards
+        getWindow().getDecorView().getViewTreeObserver().addOnGlobalFocusChangeListener(new ViewTreeObserver.OnGlobalFocusChangeListener() {
+            @Override public void onGlobalFocusChanged(View oldFocus, View newFocus) {
+                boolean in = newFocus != null && FocusNav.listOf(newFocus) == shortcutsRv;
+                if (in == inShortcuts) return;
+                inShortcuts = in;
+                if (in) showBackdrop(curKey); else hideBackdrop();
+            }
+        });
+    }
+
+    // ---------------- big blurred picture behind the cards ----------------
+    private void setupBackdropFades() {
+        FrameLayout box = findViewById(R.id.backdropBox);
+        int sw = Ui.sw(this), sh = Ui.sh(this);
+        addFade(box, R.drawable.fade_left, Math.round(sw * 0.32f), -1, android.view.Gravity.LEFT);
+        addFade(box, R.drawable.fade_right, Math.round(sw * 0.32f), -1, android.view.Gravity.RIGHT);
+        addFade(box, R.drawable.fade_top, -1, Math.round(sh * 0.30f), android.view.Gravity.TOP);
+        addFade(box, R.drawable.fade_bottom, -1, Math.round(sh * 0.55f), android.view.Gravity.BOTTOM);
+    }
+
+    private void addFade(FrameLayout box, int res, int w, int h, int gravity) {
+        View v = new View(this);
+        v.setBackgroundResource(res);
+        box.addView(v, new FrameLayout.LayoutParams(w, h, gravity));
+    }
+
+    /** Integer = picture inside the app (Live / Quran), String = url (latest movie / series), null = nothing to show yet. */
+    private Object backdropFor(String key) {
+        if (key.equals("live")) return R.drawable.bg_live;
+        if (key.equals("quran")) return R.drawable.bg_quran;
+        List<Item> l = key.equals("movie") ? mMovies : mSeries;
+        if (l == null || l.isEmpty()) return null;
+        Item it = l.get(0);
+        String u = it.backdrop != null && !it.backdrop.isEmpty() ? it.backdrop : it.icon;
+        return u != null && u.startsWith("http") ? u : null;
+    }
+
+    private void fadeBackdropIn() { backdrop.animate().alpha(BACKDROP_ALPHA).setDuration(350).start(); }
+
+    private void hideBackdrop() {
+        backdrop.animate().cancel();
+        backdrop.animate().alpha(0f).setDuration(250).start();
+    }
+
+    private void showBackdrop(final String key) {
+        final Object src = backdropFor(key);
+        if (src == null) { shownKey = null; hideBackdrop(); return; }
+        if (key.equals(shownKey)) { fadeBackdropIn(); return; }
+        shownKey = key;
+        backdrop.animate().cancel();
+        backdrop.animate().alpha(0f).setDuration(120).withEndAction(new Runnable() {
+            @Override public void run() {
+                if (!key.equals(shownKey)) return;
+                if (src instanceof Integer) {
+                    backdrop.setTag(null);
+                    backdrop.setImageResource((Integer) src);
+                    if (inShortcuts) fadeBackdropIn();
+                } else {
+                    ImageLoader.loadSoft(backdrop, (String) src, new Runnable() {
+                        @Override public void run() { if (inShortcuts && key.equals(shownKey)) fadeBackdropIn(); }
+                    });
+                }
+            }
+        }).start();
+    }
+
+    // ---------------- weather (next to the clock) ----------------
+    private static int weatherIcon(int code) {
+        if (code == 0) return R.drawable.ic_w_sun;
+        if (code <= 2) return R.drawable.ic_w_partly;
+        if (code == 3 || code == 45 || code == 48) return R.drawable.ic_w_cloud;
+        if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) return R.drawable.ic_w_rain;
+        if ((code >= 71 && code <= 77) || code == 85 || code == 86) return R.drawable.ic_w_snow;
+        if (code >= 95) return R.drawable.ic_w_storm;
+        return R.drawable.ic_w_cloud;
+    }
+
+    private void showWeather(String city, int temp, int hum, int code) {
+        wCity.setText(city == null || city.isEmpty() ? "Weather" : city);
+        wHum.setText("Humidity " + hum + "%");
+        wTemp.setText(temp + "\u00B0");
+        wIcon.setImageResource(weatherIcon(code));
+        wBox.setVisibility(View.VISIBLE);
+        wDivider.setVisibility(View.VISIBLE);
+    }
+
+    /** Location comes from the box's internet address (no permission needed), then open-meteo gives the current weather. */
+    private void loadWeather() {
+        final android.content.SharedPreferences sp = getSharedPreferences("weather", Context.MODE_PRIVATE);
+        long at = sp.getLong("at", 0);
+        if (sp.contains("temp")) showWeather(sp.getString("city", ""), sp.getInt("temp", 0), sp.getInt("hum", 0), sp.getInt("code", 0));
+        if (System.currentTimeMillis() - at < 30 * 60 * 1000L) return;
+        Net.run(new java.util.concurrent.Callable<org.json.JSONObject>() {
+            @Override public org.json.JSONObject call() throws Exception {
+                double lat, lon; String city;
+                if (sp.contains("lat") && System.currentTimeMillis() - sp.getLong("locAt", 0) < 7 * 86400000L) {
+                    lat = Double.longBitsToDouble(sp.getLong("lat", 0)); lon = Double.longBitsToDouble(sp.getLong("lon", 0)); city = sp.getString("city", "");
+                } else {
+                    org.json.JSONObject g;
+                    try {
+                        g = new org.json.JSONObject(Net.readWeb("https://ipwho.is/", Net.UA, "application/json"));
+                        if (!g.optBoolean("success", true)) throw new java.io.IOException("geo");
+                        lat = g.getDouble("latitude"); lon = g.getDouble("longitude"); city = g.optString("city");
+                    } catch (Exception e) {
+                        g = new org.json.JSONObject(Net.readWeb("http://ip-api.com/json/?fields=status,city,lat,lon", Net.UA, "application/json"));
+                        lat = g.getDouble("lat"); lon = g.getDouble("lon"); city = g.optString("city");
+                    }
+                    sp.edit().putLong("lat", Double.doubleToLongBits(lat)).putLong("lon", Double.doubleToLongBits(lon)).putString("city", city).putLong("locAt", System.currentTimeMillis()).apply();
+                }
+                String body = Net.readWeb("https://api.open-meteo.com/v1/forecast?latitude=" + lat + "&longitude=" + lon
+                        + "&current=temperature_2m,relative_humidity_2m,weather_code&timezone=auto", Net.UA, "application/json");
+                org.json.JSONObject cur = new org.json.JSONObject(body).getJSONObject("current");
+                org.json.JSONObject out = new org.json.JSONObject();
+                out.put("city", city).put("temp", (int) Math.round(cur.getDouble("temperature_2m")))
+                   .put("hum", cur.optInt("relative_humidity_2m")).put("code", cur.optInt("weather_code"));
+                return out;
+            }
+        }, new Net.Ok<org.json.JSONObject>() {
+            @Override public void ok(org.json.JSONObject o) {
+                if (isFinishing()) return;
+                sp.edit().putString("city", o.optString("city")).putInt("temp", o.optInt("temp")).putInt("hum", o.optInt("hum"))
+                        .putInt("code", o.optInt("code")).putLong("at", System.currentTimeMillis()).apply();
+                showWeather(o.optString("city"), o.optInt("temp"), o.optInt("hum"), o.optInt("code"));
+            }
+        }, null);
     }
 
     @Override protected void onStart() {
@@ -301,6 +461,7 @@ public class HomeActivity extends BaseActivity {
         }
         updateStatus();
         refresh();
+        loadWeather();
     }
 
     @Override protected void onStop() {
@@ -382,5 +543,39 @@ public class HomeActivity extends BaseActivity {
         tSeries.set(itemTiles(mSeries, false));
         show(tMoviesT, rMovies, !mMovies.isEmpty());
         show(tSeriesT, rSeries, !mSeries.isEmpty());
+        movieCard.sub(mMovies.isEmpty() ? "Latest movies" : "Latest: " + mMovies.get(0).name);
+        seriesCard.sub(mSeries.isEmpty() ? "Latest series" : "Latest: " + mSeries.get(0).name);
+        shortcuts.changed(1); shortcuts.changed(2);
+        loadMovieBackdrop();
+        if (inShortcuts && (curKey.equals("movie") || curKey.equals("series"))) { shownKey = null; showBackdrop(curKey); }
+    }
+
+    /** The newest movie's wide picture (the list only has its small poster); refreshes the big picture when it arrives. */
+    private void loadMovieBackdrop() {
+        if (mMovies == null || mMovies.isEmpty()) return;
+        final Item it = mMovies.get(0);
+        if (it.backdrop == null) it.backdrop = "";
+        if (!it.backdrop.isEmpty()) return;
+        if (backdrops.containsKey(it.id)) { it.backdrop = backdrops.get(it.id); return; }
+        run(new java.util.concurrent.Callable<String>() {
+            @Override public String call() {
+                String u = "";
+                try {
+                    org.json.JSONObject info = Xtream.vodInfo(it.id).optJSONObject("info");
+                    if (info != null) {
+                        org.json.JSONArray ba = info.optJSONArray("backdrop_path");
+                        if (ba != null && ba.length() > 0) u = ba.optString(0);
+                        if (u.isEmpty()) u = info.optString("backdrop");
+                    }
+                } catch (Exception ignored) { }
+                return u;
+            }
+        }, new Net.Ok<String>() {
+            @Override public void ok(String u) {
+                backdrops.put(it.id, u);
+                it.backdrop = u;
+                if (!u.isEmpty() && inShortcuts && curKey.equals("movie")) { shownKey = null; showBackdrop("movie"); }
+            }
+        }, null);
     }
 }
