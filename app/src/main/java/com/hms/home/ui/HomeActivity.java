@@ -26,8 +26,8 @@ import java.util.List;
 
 /**
  * The launcher home (light Google-TV-like look):
- *  top bar (clock, Wi-Fi, device settings, HMS settings) -> Live / Movies / Series (centered) -> continue watching
- *  -> new movies -> new series -> favorite apps dock (centered) -> favorite channels.
+ *  top bar (clock, Wi-Fi, device settings, HMS settings) -> Live / Movies / Series / Quran (centered) -> favorite apps dock (centered)
+ *  -> continue watching -> new movies -> new series -> favorite channels.
  */
 public class HomeActivity extends BaseActivity {
     private LinearLayout rows;
@@ -149,7 +149,7 @@ public class HomeActivity extends BaseActivity {
     // ---------------- remote control: every row is its own "tab" ----------------
     private List<RecyclerView> rowOrder() {
         List<RecyclerView> l = new ArrayList<>();
-        RecyclerView[] all = {shortcutsRv, rCont, rMovies, rSeries, appsRv, rFav};
+        RecyclerView[] all = {shortcutsRv, appsRv, rCont, rMovies, rSeries, rFav};
         for (RecyclerView r : all) if (r != null && r.getVisibility() == View.VISIBLE && r.getAdapter() != null && r.getAdapter().getItemCount() > 0) l.add(r);
         return l;
     }
@@ -236,7 +236,7 @@ public class HomeActivity extends BaseActivity {
         bindIcon(R.id.btnDevice, new Runnable() { @Override public void run() { Nav.deviceSettings(HomeActivity.this); } }, tint);   // Android settings
         bindIcon(R.id.btnApp, new Runnable() { @Override public void run() { Nav.section(HomeActivity.this, "settings"); } }, tint);  // HMS HOME settings
 
-        // 1) Live / Movies / Series: three cards side by side, centered, all visible without scrolling
+        // 1) Live / Movies / Series / Quran: cards side by side, centered, all visible without scrolling
         shortcuts = new CardAdapter(CardAdapter.SHORTCUT, cl);
         shortcutsRv = centeredList(shortcuts);
         LinearLayout.LayoutParams scp = new LinearLayout.LayoutParams(-2, -2);
@@ -247,10 +247,24 @@ public class HomeActivity extends BaseActivity {
         sc.add(new CardAdapter.Card("Live", "live").vec(R.drawable.ic_tv).colors(0xFF5B5CE6, 0xFF8E54E9));
         sc.add(new CardAdapter.Card("Movies", "movie").vec(R.drawable.ic_movie).colors(0xFFE5484D, 0xFFF2994A));
         sc.add(new CardAdapter.Card("Series", "series").vec(R.drawable.ic_series).colors(0xFF0E9F8E, 0xFF38C172));
+        sc.add(new CardAdapter.Card("Quran", "quran").vec(R.drawable.ic_quran).colors(0xFF8A6A1F, 0xFFD2A93C));
         shortcuts.set(sc);
         FocusNav.focusPos(shortcutsRv, 0);
 
-        // 2) poster rows: continue watching, new movies, new series (normal size)
+        // 2) favorite apps dock (right under the shortcuts): rounded translucent container, apps centered inside it
+        apps = new CardAdapter(CardAdapter.APP, cl);
+        appsRv = horizontalList(apps, 14);
+        appsRv.setPadding(Ui.dp(this, 14), Ui.dp(this, 14), Ui.dp(this, 14), Ui.dp(this, 14));
+        LinearLayout bar = new LinearLayout(this);
+        bar.setBackgroundResource(R.drawable.bg_apps_bar);
+        bar.setClipChildren(false);
+        bar.setGravity(android.view.Gravity.CENTER_HORIZONTAL);
+        bar.addView(appsRv, new LinearLayout.LayoutParams(-2, -2));
+        LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(-1, -2);
+        bp.setMargins(Ui.dp(this, 48), Ui.dp(this, 6), Ui.dp(this, 48), Ui.dp(this, 6));
+        rows.addView(bar, bp);
+
+        // 3) poster rows: continue watching, new movies, new series (normal size)
         tCont = new TileAdapter(140, 210, false, true, tl);
         tMovies = new TileAdapter(140, 210, false, true, tl);
         tSeries = new TileAdapter(140, 210, false, true, tl);
@@ -266,19 +280,6 @@ public class HomeActivity extends BaseActivity {
             p[0].setVisibility(View.GONE); p[1].setVisibility(View.GONE);
             titled.add(p);
         }
-
-        // 3) favorite apps dock: rounded translucent container, apps centered inside it
-        apps = new CardAdapter(CardAdapter.APP, cl);
-        appsRv = horizontalList(apps, 14);
-        appsRv.setPadding(Ui.dp(this, 14), Ui.dp(this, 14), Ui.dp(this, 14), Ui.dp(this, 14));
-        LinearLayout bar = new LinearLayout(this);
-        bar.setBackgroundResource(R.drawable.bg_apps_bar);
-        bar.setClipChildren(false);
-        bar.setGravity(android.view.Gravity.CENTER_HORIZONTAL);
-        bar.addView(appsRv, new LinearLayout.LayoutParams(-2, -2));
-        LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(-1, -2);
-        bp.setMargins(Ui.dp(this, 48), Ui.dp(this, 10), Ui.dp(this, 48), Ui.dp(this, 6));
-        rows.addView(bar, bp);
 
         // 4) favorite channels
         rows.addView(tFavT, new LinearLayout.LayoutParams(-1, -2));

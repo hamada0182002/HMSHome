@@ -16,6 +16,7 @@ public final class Nav {
                 if (!Store.hasLogin()) { i = new Intent(a, LoginActivity.class); break; }
                 i = new Intent(a, BrowseActivity.class).putExtra("type", s); break;
             case "apps": i = new Intent(a, AppsActivity.class); break;
+            case "quran": i = new Intent(a, QuranActivity.class); break;
             case "settings": i = new Intent(a, SettingsActivity.class); break;
             case "search": i = new Intent(a, SearchActivity.class); break;
             case "login": i = new Intent(a, LoginActivity.class); break;

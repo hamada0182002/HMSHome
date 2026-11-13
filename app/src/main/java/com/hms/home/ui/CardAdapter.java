@@ -100,7 +100,8 @@ public class CardAdapter extends RecyclerView.Adapter<CardAdapter.VH> {
         FrameLayout root = new FrameLayout(c);
         RecyclerView.LayoutParams lp = new RecyclerView.LayoutParams(w, h);
         int m = Ui.dp(c, mode == HERO ? 8 : 6);
-        lp.setMargins(m, m, m, m);
+        int mx = mode == SHORTCUT ? Ui.dp(c, 22) : m;      // more air between Live / Movies / Series / Quran
+        lp.setMargins(mx, m, mx, m);
         root.setLayoutParams(lp);
         root.setFocusable(true);
         root.setClickable(true);

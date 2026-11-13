@@ -30,6 +30,7 @@
             </intent-filter>
         </activity>
         <activity android:name=".ui.AppsActivity" android:screenOrientation="landscape"/>
+        <activity android:name=".ui.QuranActivity" android:screenOrientation="landscape"/>
         <activity android:name=".ui.LoginActivity" android:screenOrientation="landscape" android:windowSoftInputMode="adjustResize"/>
         <activity android:name=".ui.BrowseActivity" android:screenOrientation="landscape"/>
         <activity android:name=".ui.SearchActivity" android:screenOrientation="landscape" android:windowSoftInputMode="adjustResize"/>
