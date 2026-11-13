@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:paddingLeft="36dp" android:paddingRight="36dp" android:paddingTop="20dp">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical" android:orientation="horizontal">
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="HMS HOME"
+            android:textColor="@color/bronze" android:textSize="30sp" android:textStyle="bold" android:letterSpacing="0.12"/>
+        <View android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1"/>
+        <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="vertical" android:gravity="end">
+            <TextClock android:id="@+id/clock" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:format12Hour="hh:mm a" android:format24Hour="HH:mm" android:textColor="@color/white" android:textSize="28sp"/>
+            <TextClock android:id="@+id/date" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:format12Hour="EEEE d MMMM yyyy" android:format24Hour="EEEE d MMMM yyyy" android:textColor="@color/secondary" android:textSize="14sp"/>
+        </LinearLayout>
+    </LinearLayout>
+    <LinearLayout android:id="@+id/nav" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:orientation="horizontal"/>
+    <ScrollView android:id="@+id/scroll" android:layout_width="match_parent" android:layout_height="match_parent" android:fillViewport="true" android:scrollbars="none">
+        <LinearLayout android:id="@+id/rows" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingBottom="30dp"/>
+    </ScrollView>
+</LinearLayout>

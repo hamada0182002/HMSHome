@@ -1,0 +1,14 @@
+*.iml
+.gradle/
+/local.properties
+/.idea/
+.DS_Store
+/build/
+/app/build/
+*.apk
+
+*.jks
+*.keystore
+*.b64
+keystore.properties
+GITHUB_SECRETS.txt

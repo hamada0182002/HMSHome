@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:padding="36dp">
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="APPS" android:textColor="@color/bronze" android:textSize="28sp" android:textStyle="bold"/>
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="OK: open  •  Hold OK or MENU: favorites options" android:textColor="@color/secondary" android:textSize="14sp" android:layout_marginBottom="8dp"/>
+    <androidx.recyclerview.widget.RecyclerView android:id="@+id/grid" android:layout_width="match_parent" android:layout_height="match_parent" android:clipToPadding="false"/>
+</LinearLayout>

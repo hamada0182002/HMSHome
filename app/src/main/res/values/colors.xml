@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="charcoal">#14110F</color>
+    <color name="beige">#D9C7A7</color>
+    <color name="bronze">#B07D3A</color>
+    <color name="surface">#211D19</color>
+    <color name="surface_hi">#2E2820</color>
+    <color name="secondary">#A99C8B</color>
+    <color name="white">#F5F1EA</color>
+    <color name="scrim">#CC14110F</color>
+</resources>

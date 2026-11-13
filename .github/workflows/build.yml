@@ -1,0 +1,51 @@
+name: Build HMS Home APK
+on:
+  push:
+    tags: ['v*']          # نشر إصدار:  git tag v1.0.0 && git push --tags
+  workflow_dispatch:      # بناء تجريبي (APK في Artifacts بس)
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Accept Android SDK licenses
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - name: Version
+        id: v
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then V="${GITHUB_REF_NAME#v}"; else V="1.0.0"; fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+      - name: Decode signing key (from GitHub Secrets)
+        env:
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ]; then echo "::error::Secret KEYSTORE_B64 is missing (see README)"; exit 1; fi
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/hms-release.jks"
+          echo "KEYSTORE_FILE=$RUNNER_TEMP/hms-release.jks" >> "$GITHUB_ENV"
+      - name: Build release APK
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: gradle assembleRelease --no-daemon -PappVersion=${{ steps.v.outputs.version }}
+      - name: Rename APK
+        run: mv app/build/outputs/apk/release/*.apk "HMS-Home-${{ steps.v.outputs.version }}.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HMS-Home-APK
+          path: HMS-Home-*.apk
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: HMS-Home-*.apk
+          generate_release_notes: true

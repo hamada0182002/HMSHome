@@ -1,0 +1,54 @@
+plugins { id 'com.android.application' }
+
+// الإصدار بييجي من تاج git (v1.2.3 -> 1.2.3) عن طريق -PappVersion (شوف .github/workflows/build.yml)
+def appVersion = (project.findProperty('appVersion') ?: '1.0.0').toString()
+def vParts = appVersion.tokenize('.').collect { it.isInteger() ? it.toInteger() : 0 }
+def vp = { int i -> i < vParts.size() ? vParts[i] : 0 }
+def appVersionCode = vp(0) * 10000 + vp(1) * 100 + vp(2)
+
+// مفتاح التوقيع مش جوه المشروع. بييجي من GitHub Secrets (متغيرات بيئة):
+// KEYSTORE_FILE, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD
+// من غيرهم (بناء محلي للتجربة) الـ APK بيتوقّع بمفتاح debug عشان يتثبّت.
+def ksPath = System.getenv('KEYSTORE_FILE')
+def ksFile = (ksPath != null && file(ksPath).exists()) ? file(ksPath) : null
+
+android {
+    namespace 'com.hms.home'
+    compileSdk 34
+    buildFeatures { buildConfig true }
+    defaultConfig {
+        applicationId 'com.hms.home'
+        minSdk 21          // كان 25 — ده اللي كان بيمنع التثبيت على أندرويد 7.0
+        targetSdk 25
+        versionCode appVersionCode
+        versionName appVersion
+    }
+    signingConfigs {
+        if (ksFile != null) {
+            hms {
+                storeFile ksFile
+                storePassword System.getenv('KEYSTORE_PASSWORD')
+                keyAlias System.getenv('KEY_ALIAS')
+                keyPassword System.getenv('KEY_PASSWORD')
+            }
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.getByName(ksFile != null ? 'hms' : 'debug')
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    lint { abortOnError false }
+}
+
+dependencies {
+    implementation 'androidx.recyclerview:recyclerview:1.2.1'
+    implementation 'com.google.android.exoplayer:exoplayer-core:2.19.1'
+    implementation 'com.google.android.exoplayer:exoplayer-hls:2.19.1'
+    implementation 'com.google.android.exoplayer:exoplayer-ui:2.19.1'
+}
