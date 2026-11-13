@@ -66,7 +66,7 @@ public final class PairServer {
         try { if (ss != null) ss.close(); } catch (IOException ignored) { }
     }
 
-    private static String localIp() {
+    public static String localIp() {
         try {
             String fallback = null;
             for (NetworkInterface ni : Collections.list(NetworkInterface.getNetworkInterfaces())) {

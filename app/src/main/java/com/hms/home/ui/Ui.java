@@ -114,4 +114,16 @@ public final class Ui {
         long h = s / 3600, m = (s % 3600) / 60, sec = s % 60;
         return h > 0 ? String.format("%d:%02d:%02d", h, m, sec) : String.format("%02d:%02d", m, sec);
     }
+
+    /** Black-on-white QR code bitmap for a text / link. */
+    public static android.graphics.Bitmap qr(String text, int size) throws Exception {
+        com.google.zxing.common.BitMatrix m = new com.google.zxing.qrcode.QRCodeWriter()
+                .encode(text, com.google.zxing.BarcodeFormat.QR_CODE, size, size);
+        int w = m.getWidth(), h = m.getHeight();
+        int[] px = new int[w * h];
+        for (int y = 0; y < h; y++) for (int x = 0; x < w; x++) px[y * w + x] = m.get(x, y) ? 0xFF000000 : 0xFFFFFFFF;
+        android.graphics.Bitmap bm = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.RGB_565);
+        bm.setPixels(px, 0, w, 0, 0, w, h);
+        return bm;
+    }
 }

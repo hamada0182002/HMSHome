@@ -13,6 +13,8 @@ import com.hms.home.BuildConfig;
 import com.hms.home.R;
 import com.hms.home.data.AppsManager;
 import com.hms.home.data.ImageLoader;
+import com.hms.home.data.KeyServer;
+import com.hms.home.input.KbHelper;
 import com.hms.home.data.Net;
 import com.hms.home.data.Updater;
 import com.hms.home.data.Store;
@@ -26,6 +28,7 @@ public class SettingsActivity extends BaseActivity {
     private TextAdapter ad;
     private static final String[] ASPECT = {"Fit", "Stretch", "Zoom"};
     private static final String[] FONT = {"Normal", "Large", "Extra large"};
+    private static final String[] KBMODE = {"Only while typing (saves RAM)", "Always on", "Off"};
 
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
@@ -59,6 +62,11 @@ public class SettingsActivity extends BaseActivity {
         r.add(new TextAdapter.Row("Font size", FONT[Store.fontLevel()] + "  (press OK to change)", "font"));
         r.add(new TextAdapter.Row("Default aspect ratio", ASPECT[Store.aspect()], "aspect"));
         r.add(new TextAdapter.Row("Default subtitles", Store.subsDefault() ? "On" : "Off", "subs"));
+        r.add(new TextAdapter.Row("Phone keyboard  -  QR code", "Type on your phone instead of the remote  •  " + KbHelper.state(this), "kbqr"));
+        r.add(new TextAdapter.Row("Phone keyboard: enable", "Turn on \"HMS Phone Keyboard\" in Android's keyboard list", "kbenable"));
+        r.add(new TextAdapter.Row("Phone keyboard: choose", "Pick \"HMS Phone Keyboard\" as the current keyboard", "kbpick"));
+        r.add(new TextAdapter.Row("Phone keyboard server", KBMODE[Store.kbMode()] + "  (press OK to change)", "kbmode"));
+        r.add(new TextAdapter.Row("Phone keyboard: reset code", "Creates a new link - the page saved on your phone stops working", "kbreset"));
         r.add(new TextAdapter.Row("Manage favorite apps", "Open APPS (hold OK on an app)", "apps"));
         r.add(new TextAdapter.Row("Clear favorites", "Apps + channels + movies + series", "clearfav"));
         r.add(new TextAdapter.Row("Clear cache", "Images + IPTV index", "cache"));
@@ -78,6 +86,22 @@ public class SettingsActivity extends BaseActivity {
             case "font": Store.setFontLevel((Store.fontLevel() + 1) % 3); recreate(); break;
             case "aspect": Store.setAspect((Store.aspect() + 1) % 3); build(); break;
             case "subs": Store.setSubsDefault(!Store.subsDefault()); build(); break;
+            case "kbqr": showKbQr(); break;
+            case "kbenable":
+                try { startActivity(new Intent(Settings.ACTION_INPUT_METHOD_SETTINGS)); }
+                catch (Exception e) { Nav.deviceSettings(this); }
+                break;
+            case "kbpick":
+                ((android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE)).showInputMethodPicker();
+                break;
+            case "kbmode": Store.setKbMode((Store.kbMode() + 1) % 3); build(); break;
+            case "kbreset":
+                new AlertDialog.Builder(this, R.style.HmsDialog).setTitle("Reset keyboard code?")
+                        .setMessage("The old link stops working. Show the QR again and save the new page on your phone.")
+                        .setPositiveButton("Reset", new DialogInterface.OnClickListener() {
+                            @Override public void onClick(DialogInterface d, int w) { Store.resetKbToken(); toast("تم تغيير الكود"); showKbQr(); }
+                        }).setNegativeButton("Cancel", null).show();
+                break;
             case "apps": startActivity(new Intent(this, AppsActivity.class)); break;
             case "clearfav":
                 new AlertDialog.Builder(this, R.style.HmsDialog).setTitle("Clear all favorites?").setPositiveButton("Clear", new DialogInterface.OnClickListener() {
@@ -95,6 +119,31 @@ public class SettingsActivity extends BaseActivity {
                 break;
             default: break;
         }
+    }
+
+    /** Fixed QR for the phone keyboard page (same link every time, so the page can be saved on the phone). */
+    private void showKbQr() {
+        String url = KeyServer.url();
+        if (url == null) { toast("مفيش شبكة محلية (Wi-Fi / Ethernet) متوصلة"); return; }
+        android.graphics.Bitmap qr;
+        try { qr = Ui.qr(url, Math.min(Ui.sh(this) * 55 / 100, Ui.dp(this, 340))); }
+        catch (Exception e) { toast("تعذر إنشاء الباركود"); return; }
+        android.widget.LinearLayout box = new android.widget.LinearLayout(this);
+        box.setOrientation(android.widget.LinearLayout.VERTICAL);
+        box.setGravity(android.view.Gravity.CENTER_HORIZONTAL);
+        box.setPadding(Ui.dp(this, 24), Ui.dp(this, 12), Ui.dp(this, 24), Ui.dp(this, 4));
+        android.widget.ImageView iv = new android.widget.ImageView(this);
+        iv.setImageBitmap(qr);
+        box.addView(iv, new android.widget.LinearLayout.LayoutParams(qr.getWidth(), qr.getHeight()));
+        TextView steps = Ui.label(this, "1) وصّل الموبايل بنفس شبكة الواي فاي بتاعة التيفي\n2) صوّر الباركود وافتح الرابط، وبعدين احفظ الصفحة في الشاشة الرئيسية للموبايل\n3) على التيفي اختار \"HMS Phone Keyboard\" كيبورد، وافتح أي خانة كتابة واكتب من الموبايل\n\nلازم IP البوكس يفضل ثابت (من إعدادات الراوتر) علشان الرابط ما يتغيرش.", 14, R.color.h_ink, false);
+        steps.setPadding(0, Ui.dp(this, 10), 0, 0);
+        box.addView(steps);
+        TextView link = Ui.label(this, url, 13, R.color.h_ink2, false);
+        link.setPadding(0, Ui.dp(this, 6), 0, 0);
+        box.addView(link);
+        android.widget.ScrollView sv = new android.widget.ScrollView(this);
+        sv.addView(box);
+        new AlertDialog.Builder(this, R.style.HmsDialog).setTitle("Phone keyboard").setView(sv).setPositiveButton("OK", null).show();
     }
 
     /** Lets the user pick which server folder (category) feeds the "new" rows on the home. */

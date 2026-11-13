@@ -212,4 +212,23 @@ public final class Store {
     public static void setAspect(int v) { p.edit().putInt("aspect", v).apply(); }
     public static boolean subsDefault() { return p.getBoolean("subs", false); }
     public static void setSubsDefault(boolean v) { p.edit().putBoolean("subs", v).apply(); }
+
+    // ---- phone keyboard (HMS Phone Keyboard) ----
+    /** Fixed secret in the phone page link, so the saved page / QR keeps working. */
+    public static String kbToken() {
+        String t = p.getString("kb_token", "");
+        if (t.isEmpty()) t = resetKbToken();
+        return t;
+    }
+    public static String resetKbToken() {
+        String chars = "abcdefghjkmnpqrstuvwxyz23456789";
+        java.security.SecureRandom r = new java.security.SecureRandom();
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < 10; i++) sb.append(chars.charAt(r.nextInt(chars.length())));
+        p.edit().putString("kb_token", sb.toString()).apply();
+        return sb.toString();
+    }
+    /** 0 = server only while a text field is open (saves RAM), 1 = always on, 2 = off. */
+    public static int kbMode() { return p.getInt("kb_mode", 0); }
+    public static void setKbMode(int m) { p.edit().putInt("kb_mode", m).apply(); }
 }
