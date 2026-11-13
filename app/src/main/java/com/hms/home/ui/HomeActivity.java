@@ -35,6 +35,31 @@ public class HomeActivity extends BaseActivity {
     private RecyclerView appsRv, heroRv, shortcutsRv;
     private final java.util.Map<RecyclerView, Integer> lastPos = new java.util.HashMap<>();
     private boolean opening;
+    private ImageView btnWifi, icUsb;
+    private final int tintBase = Color.parseColor("#4A5468");
+
+    /** Wi-Fi icon: faded when there is no connection, clear when connected. USB icon: only while a flash drive is mounted. */
+    private void updateStatus() {
+        boolean online = false;
+        try {
+            android.net.NetworkInfo ni = ((android.net.ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE)).getActiveNetworkInfo();
+            online = ni != null && ni.isConnected();
+        } catch (Exception ignored) { }
+        btnWifi.setAlpha(online ? 1f : 0.3f);
+        boolean usb = false;
+        if (android.os.Build.VERSION.SDK_INT >= 24) {
+            try {
+                android.os.storage.StorageManager sm = (android.os.storage.StorageManager) getSystemService(Context.STORAGE_SERVICE);
+                for (android.os.storage.StorageVolume v : sm.getStorageVolumes())
+                    if (v.isRemovable() && android.os.Environment.MEDIA_MOUNTED.equals(v.getState())) usb = true;
+            } catch (Exception ignored) { }
+        }
+        icUsb.setVisibility(usb ? View.VISIBLE : View.GONE);
+    }
+
+    private final BroadcastReceiver statusRx = new BroadcastReceiver() {
+        @Override public void onReceive(Context c, Intent i) { updateStatus(); }
+    };
     private TileAdapter tCont, tFav, tMovies, tSeries;
     private final List<View[]> titled = new ArrayList<>();   // {title, list} pairs that are hidden when empty
     private TextView tContT, tFavT, tMoviesT, tSeriesT;
@@ -194,7 +219,10 @@ public class HomeActivity extends BaseActivity {
         setContentView(R.layout.activity_home);
         rows = findViewById(R.id.rows);
 
-        int tint = Color.parseColor("#4A5468");
+        int tint = tintBase;
+        btnWifi = findViewById(R.id.btnWifi);
+        icUsb = findViewById(R.id.icUsb);
+        icUsb.setColorFilter(tint);
         bindIcon(R.id.btnWifi, new Runnable() { @Override public void run() { Nav.wifiSettings(HomeActivity.this); } }, tint);
         bindIcon(R.id.btnDevice, new Runnable() { @Override public void run() { Nav.deviceSettings(HomeActivity.this); } }, tint);   // Android settings
         bindIcon(R.id.btnApp, new Runnable() { @Override public void run() { Nav.section(HomeActivity.this, "settings"); } }, tint);  // HMS HOME settings
@@ -249,13 +277,22 @@ public class HomeActivity extends BaseActivity {
 
     @Override protected void onStart() {
         super.onStart();
-        if (!receiverOn) { registerReceiver(pkgRx, AppsManager.changeFilter()); receiverOn = true; }
+        if (!receiverOn) {
+            registerReceiver(pkgRx, AppsManager.changeFilter());
+            registerReceiver(statusRx, new android.content.IntentFilter(android.net.ConnectivityManager.CONNECTIVITY_ACTION));
+            android.content.IntentFilter mf = new android.content.IntentFilter();
+            for (String a : new String[]{Intent.ACTION_MEDIA_MOUNTED, Intent.ACTION_MEDIA_UNMOUNTED, Intent.ACTION_MEDIA_EJECT, Intent.ACTION_MEDIA_REMOVED, Intent.ACTION_MEDIA_BAD_REMOVAL}) mf.addAction(a);
+            mf.addDataScheme("file");
+            registerReceiver(statusRx, mf);
+            receiverOn = true;
+        }
+        updateStatus();
         refresh();
     }
 
     @Override protected void onStop() {
         cancelAll();
-        if (receiverOn) { unregisterReceiver(pkgRx); receiverOn = false; }
+        if (receiverOn) { unregisterReceiver(pkgRx); unregisterReceiver(statusRx); receiverOn = false; }
         super.onStop();
     }
 
