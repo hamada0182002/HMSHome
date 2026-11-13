@@ -11,7 +11,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.HttpURLConnection;
+import okhttp3.Response;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -49,9 +49,9 @@ public final class Updater {
     public static Info check(String currentVersion) throws Exception {
         String body;
         try {
-            body = Net.readAll("https://api.github.com/repos/" + GITHUB_REPO + "/releases/latest", "HMSHome/1.0", "application/vnd.github+json");
+            body = Net.readWeb("https://api.github.com/repos/" + GITHUB_REPO + "/releases/latest", "HMSHome/1.0", "application/vnd.github+json");
         } catch (IOException e) {
-            if ("HTTP 404".equals(e.getMessage())) throw new IOException("مفيش إصدار منشور لسه على GitHub (أو اسم المستودع غلط / المستودع مش Public)");
+            if (e instanceof Net.HttpException && ((Net.HttpException) e).code == 404) throw new IOException("مفيش إصدار منشور لسه على GitHub (أو اسم المستودع غلط / المستودع مش Public)");
             throw e;
         }
         JSONObject j = new JSONObject(body);
@@ -82,10 +82,10 @@ public final class Updater {
         File[] old = dir.listFiles();
         if (old != null) for (File f : old) f.delete();
         File out = new File(dir, "HMS-Home-" + info.version + ".apk");
-        HttpURLConnection c = Net.open(info.apkUrl, "HMSHome/1.0", "*/*");
-        try {
-            long total = c.getContentLength() > 0 ? c.getContentLength() : info.size;
-            InputStream in = c.getInputStream();
+        try (Response resp = Net.openWeb(info.apkUrl, "HMSHome/1.0", "*/*", 60)) {
+            long len = resp.body().contentLength();
+            long total = len > 0 ? len : info.size;
+            InputStream in = resp.body().byteStream();
             OutputStream os = new FileOutputStream(out);
             try {
                 byte[] buf = new byte[64 * 1024];
@@ -99,7 +99,7 @@ public final class Updater {
                     }
                 }
             } finally { os.close(); }
-        } finally { c.disconnect(); }
+        }
         return out;
     }
 

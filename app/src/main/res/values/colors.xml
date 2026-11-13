@@ -13,4 +13,11 @@
     <color name="pill_sel">#59FFFFFF</color>
     <color name="icon_bg">#E6E2F0</color>
     <color name="avatar">#4C7DF0</color>
+    <!-- new light launcher look -->
+    <color name="home_top">#EEF2F7</color>
+    <color name="home_bottom">#C7D2E1</color>
+    <color name="h_ink">#1B1F2A</color>
+    <color name="h_ink2">#566074</color>
+    <color name="h_accent">#1F7AF5</color>
+    <color name="h_bar">#80FFFFFF</color>
 </resources>

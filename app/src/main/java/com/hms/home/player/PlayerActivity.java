@@ -56,9 +56,10 @@ public class PlayerActivity extends Activity {
 
     private Item cur;
     private int idx;
-    private boolean live, failed, tsTried;
-    private String liveExt = "m3u8";
+    private boolean live, failed, everPlayed;
+    private final String liveExt = "m3u8";   // same as HMS Player: /live/user/pass/id.m3u8
     private int retries;
+    private long stableSince;
     private long resume = C.TIME_UNSET;
     private int aspect;
     private Net.Task epgTask;
@@ -68,9 +69,14 @@ public class PlayerActivity extends Activity {
     private static final String[] MODE_NAMES = {"Fit", "Stretch", "Zoom"};
 
     private final Runnable hideRx = new Runnable() { @Override public void run() { hideControls(); } };
-    private final Runnable retryRx = new Runnable() { @Override public void run() { startCurrent(); } };
+    private boolean retryPending;
+    private final Runnable retryRx = new Runnable() { @Override public void run() { retryPending = false; startCurrent(); } };
     private final Runnable tick = new Runnable() {
-        @Override public void run() { updateTime(); h.postDelayed(this, 1000); }
+        @Override public void run() {
+            updateTime();
+            if (player != null && player.isPlaying() && System.currentTimeMillis() - stableSince > 20000) retries = 0;
+            h.postDelayed(this, 1000);
+        }
     };
     private final Runnable saveRx = new Runnable() {
         @Override public void run() { saveProgress(); h.postDelayed(this, 15000); }
@@ -152,28 +158,34 @@ public class PlayerActivity extends Activity {
 
     private void initPlayer() {
         if (player != null) return;
+        // Same player setup as HMS Player (PlayerCtl.kt): same User-Agent, timeouts, buffers, redirects.
         DefaultHttpDataSource.Factory hf = new DefaultHttpDataSource.Factory()
-                .setConnectTimeoutMs(10000).setReadTimeoutMs(15000).setAllowCrossProtocolRedirects(true)
-                .setUserAgent(com.hms.home.data.Net.ua());
+                .setUserAgent(Net.UA)
+                .setAllowCrossProtocolRedirects(true)
+                .setConnectTimeoutMs(15000)
+                .setReadTimeoutMs(20000);
         DefaultLoadControl lc = new DefaultLoadControl.Builder()
-                .setBufferDurationsMs(15000, 30000, 2000, 4000)
-                .setTargetBufferBytes(12 * 1024 * 1024)
-                .setPrioritizeTimeOverSizeThresholds(false).build();
+                .setBufferDurationsMs(20000, 60000, 2000, 5000).build();
         DefaultRenderersFactory rf = new DefaultRenderersFactory(this)
-                .setEnableDecoderFallback(true)
-                .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF);
+                .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
+                .setEnableDecoderFallback(true);
         player = new ExoPlayer.Builder(this, rf)
                 .setMediaSourceFactory(new DefaultMediaSourceFactory(hf))
-                .setLoadControl(lc).build();
+                .setLoadControl(lc)
+                .setHandleAudioBecomingNoisy(true)
+                .build();
         player.setTrackSelectionParameters(player.getTrackSelectionParameters().buildUpon()
                 .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !Store.subsDefault()).build());
         player.addListener(new Player.Listener() {
             @Override public void onPlaybackStateChanged(int st) {
                 if (st == Player.STATE_BUFFERING) showStatus("Buffering…");
-                else if (st == Player.STATE_READY) { status.setVisibility(View.GONE); retries = 0; failed = false; }
+                else if (st == Player.STATE_READY) { status.setVisibility(View.GONE); failed = false; }
                 else if (st == Player.STATE_ENDED) onEnded();
             }
-            @Override public void onIsPlayingChanged(boolean p) { bPlay.setText(p ? "PAUSE" : "PLAY"); }
+            @Override public void onIsPlayingChanged(boolean p) {
+                bPlay.setText(p ? "PAUSE" : "PLAY");
+                if (p) { everPlayed = true; stableSince = System.currentTimeMillis(); }
+            }
             @Override public void onPlayerError(PlaybackException e) { handleError(e); }
         });
         pv.setPlayer(player);
@@ -189,7 +201,7 @@ public class PlayerActivity extends Activity {
         PlayQueue.index = i;
         cur = PlayQueue.items.get(i);
         live = cur.type.equals("live");
-        retries = 0; failed = false; tsTried = false; liveExt = "m3u8";
+        retries = 0; failed = false; everPlayed = false; retryPending = false;
         resume = live ? C.TIME_UNSET : Store.getPosition(cur);
         ptitle.setText(cur.name);
         pinfo.setText(cur.type.equals("episode") ? cur.extra : "");
@@ -211,19 +223,31 @@ public class PlayerActivity extends Activity {
         player.setPlayWhenReady(true);
     }
 
+    /** Auto-reconnect with the same rules as HMS Player: 2 tries for a movie that never started, 8 otherwise. */
     private void handleError(PlaybackException e) {
         if (e.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW && player != null) {
             player.seekToDefaultPosition(); player.prepare(); return;
         }
-        if (live && !tsTried && liveExt.equals("m3u8")) { tsTried = true; liveExt = "ts"; failed = true; showStatus("Trying another stream format…"); h.postDelayed(retryRx, 500); return; }
-        failed = true;
-        if (retries < 3) {
-            retries++;
-            showStatus(reason(e) + "\nإعادة المحاولة (" + retries + "/3)…");
-            h.postDelayed(retryRx, 3000);
-        } else {
-            showStatus(reason(e) + "\nاضغط OK لإعادة المحاولة");
+        reconnect(e);
+    }
+
+    private void reconnect(PlaybackException e) {
+        if (player == null) return;
+        if (retryPending) return;
+        retries++;
+        int limit = (!everPlayed && !live) ? 2 : 8;
+        String code = e == null ? "?" : e.getErrorCodeName();
+        if (retries > limit) {
+            failed = true;
+            showStatus(!everPlayed && !live
+                    ? "الملف مش شغال (" + code + "). غالباً عدد الأجهزة المسموح بيها في اشتراكك اتملى، أو الملف معطّل، أو صيغته مش مدعومة.\nاضغط OK لإعادة المحاولة"
+                    : "تعذّر تشغيل البث (" + code + "). اتأكد من الإنترنت.\nاضغط OK لإعادة المحاولة");
+            return;
         }
+        failed = true;
+        showStatus("انقطع البث... بعيد الاتصال تلقائياً (محاولة " + retries + ")");
+        retryPending = true;
+        h.postDelayed(retryRx, Math.min(1500L * retries, 15000L));
     }
 
     private String reason(PlaybackException e) {
@@ -235,7 +259,9 @@ public class PlayerActivity extends Activity {
     }
 
     private void onEnded() {
-        if (live) return;
+        if (live) { reconnect(null); return; }
+        long d = player.getDuration();
+        if (d != C.TIME_UNSET && player.getCurrentPosition() < d - 30000 && retries < 3) { reconnect(null); return; }
         Store.saveProgress(cur, 1, 1);
         if (idx + 1 < PlayQueue.items.size()) startItem(idx + 1); else finish();
     }
@@ -248,7 +274,7 @@ public class PlayerActivity extends Activity {
 
     private void togglePlay() {
         if (player == null) return;
-        if (failed) { retries = 0; h.removeCallbacks(retryRx); startCurrent(); return; }
+        if (failed) { retries = 0; retryPending = false; h.removeCallbacks(retryRx); startCurrent(); return; }
         player.setPlayWhenReady(!player.getPlayWhenReady());
     }
 

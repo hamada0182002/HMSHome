@@ -50,8 +50,7 @@ public class SettingsActivity extends BaseActivity {
     private void build() {
         List<TextAdapter.Row> r = new ArrayList<>();
         r.add(new TextAdapter.Row("Check for updates", "Current version " + BuildConfig.VERSION_NAME + "  -  downloads and installs the newest version online", "update"));
-        r.add(new TextAdapter.Row("IPTV account", Store.hasLogin() ? Store.user() + " @ " + Store.server() + (Store.isSaved() ? "" : "  (session only)") : "Not logged in", "account"));
-        if (Store.hasLogin()) r.add(new TextAdapter.Row("Log out of IPTV", "Removes saved login", "logout"));
+        r.add(new TextAdapter.Row("IPTV accounts", Store.hasLogin() ? Store.active().name + "  |  " + Store.user() + " @ " + Store.server().replace("http://", "").replace("https://", "") + "   (" + Store.accounts().size() + ")" : "No account yet - add one", "account"));
         r.add(new TextAdapter.Row("Reload IPTV data", "Re-downloads channel / movie / series index next time", "reload"));
         r.add(new TextAdapter.Row("Font size", FONT[Store.fontLevel()] + "  (press OK to change)", "font"));
         r.add(new TextAdapter.Row("Default aspect ratio", ASPECT[Store.aspect()], "aspect"));
@@ -59,6 +58,7 @@ public class SettingsActivity extends BaseActivity {
         r.add(new TextAdapter.Row("Manage favorite apps", "Open APPS (hold OK on an app)", "apps"));
         r.add(new TextAdapter.Row("Clear favorites", "Apps + channels + movies + series", "clearfav"));
         r.add(new TextAdapter.Row("Clear cache", "Images + IPTV index", "cache"));
+        r.add(new TextAdapter.Row("Device settings", "Android settings: Wi-Fi, display, sound, apps...", "device"));
         r.add(new TextAdapter.Row("Set HMS HOME as default home", "Pick \"HMS HOME\" then \"Always\"", "home"));
         r.add(new TextAdapter.Row("About", "HMS HOME " + BuildConfig.VERSION_NAME + "  •  com.hms.home  •  Android " + Build.VERSION.RELEASE + "  •  " + Build.CPU_ABI, "about"));
         ad.set(r);
@@ -67,7 +67,6 @@ public class SettingsActivity extends BaseActivity {
     private void act(String id) {
         switch (id) {
             case "account": startActivity(new Intent(this, LoginActivity.class)); break;
-            case "logout": Store.logout(); Xtream.clearCache(); HomeActivity.invalidateMemo(); toast("تم تسجيل الخروج"); build(); break;
             case "reload": Xtream.clearCache(); HomeActivity.invalidateMemo(); toast("هيتم تحميل بيانات IPTV من جديد"); break;
             case "update": checkUpdate(); break;
             case "font": Store.setFontLevel((Store.fontLevel() + 1) % 3); recreate(); break;
@@ -80,6 +79,7 @@ public class SettingsActivity extends BaseActivity {
                 }).setNegativeButton("Cancel", null).show();
                 break;
             case "cache": ImageLoader.clear(); Xtream.clearCache(); HomeActivity.invalidateMemo(); toast("تم مسح الكاش"); break;
+            case "device": Nav.deviceSettings(this); break;
             case "home":
                 try { startActivity(new Intent(Settings.ACTION_HOME_SETTINGS)); }
                 catch (Exception e) {

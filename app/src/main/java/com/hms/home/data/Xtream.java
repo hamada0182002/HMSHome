@@ -11,7 +11,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
-import java.net.HttpURLConnection;
 import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -19,6 +18,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.PriorityQueue;
 import org.json.JSONArray;
+import okhttp3.Response;
 import org.json.JSONObject;
 
 /** Xtream Codes API client. Big lists are streamed (JsonReader) so memory stays low. */
@@ -30,14 +30,34 @@ public final class Xtream {
 
     public static void init(Context c) { cacheDir = c.getApplicationContext().getCacheDir(); }
 
-    public static String norm(String s) {
-        s = s == null ? "" : s.trim();
+    /** Cleans a server address (same rules as HMS Player's buildAccount). */
+    public static String norm(String server) {
+        String s = server == null ? "" : server.replaceAll("\\s", "");
         if (s.isEmpty()) return s;
-        if (!s.startsWith("http://") && !s.startsWith("https://")) s = "http://" + s;
-        int i = s.indexOf("/player_api.php");
-        if (i > 0) s = s.substring(0, i);
+        if (!s.toLowerCase().startsWith("http://") && !s.toLowerCase().startsWith("https://")) s = "http://" + s;
+        android.net.Uri uri = android.net.Uri.parse(s);
+        String path = uri.getPath() == null ? "" : uri.getPath();
+        if (s.contains("?") || path.contains(".php")) s = uri.getScheme() + "://" + uri.getAuthority();
         while (s.endsWith("/")) s = s.substring(0, s.length() - 1);
         return s;
+    }
+
+    /**
+     * Builds an account from what the user typed. Also understands a pasted get.php / player_api.php link
+     * (username / password are taken from it when the fields are empty). Same as HMS Player.
+     */
+    public static Account buildAccount(String id, String name, String server, String user, String pass) {
+        String s = server == null ? "" : server.replaceAll("\\s", "");
+        String u = user == null ? "" : user.trim();
+        String p = pass == null ? "" : pass.trim();
+        if (!s.toLowerCase().startsWith("http://") && !s.toLowerCase().startsWith("https://")) s = "http://" + s;
+        android.net.Uri uri = android.net.Uri.parse(s);
+        if (u.isEmpty()) { String q = uri.getQueryParameter("username"); u = q == null ? "" : q; }
+        if (p.isEmpty()) { String q = uri.getQueryParameter("password"); p = q == null ? "" : q; }
+        s = norm(s);
+        String n = name == null ? "" : name.trim();
+        if (n.isEmpty()) { String h = android.net.Uri.parse(s).getHost(); n = h == null ? "IPTV" : h; }
+        return new Account(id != null ? id : java.util.UUID.randomUUID().toString(), n, s, u, p);
     }
 
     private static String enc(String s) {
@@ -50,16 +70,12 @@ public final class Xtream {
     }
     private static String api(String action, String extra) { return api(Store.server(), Store.user(), Store.pass(), action, extra); }
 
-    /** Checks the account. Throws IOException with a readable message. Returns user_info. */
-    public static JSONObject auth(String server, String user, String pass) throws Exception {
-        JSONObject o = new JSONObject(Net.readAll(api(server, user, pass, null, null)));
+    /** Checks the account like HMS Player (30 s). Throws Net.AuthException on wrong login. Returns user_info. */
+    public static JSONObject auth(Account a) throws Exception {
+        JSONObject o = new JSONObject(Net.readAll(api(a.server, a.user, a.pass, null, null), 30));
         JSONObject ui = o.optJSONObject("user_info");
-        if (ui == null) throw new IOException("بيانات الدخول غير صحيحة أو السيرفر مش Xtream Codes");
-        if (ui.optInt("auth", 0) != 1) throw new IOException("اسم المستخدم أو كلمة السر غير صحيحة");
-        String st = ui.optString("status", "Active");
-        if (!"Active".equalsIgnoreCase(st)) throw new IOException("الحساب غير مفعّل (" + st + ")");
-        long exp = ui.optLong("exp_date", 0);
-        if (exp > 0 && exp * 1000 < System.currentTimeMillis()) throw new IOException("الاشتراك منتهي");
+        if (ui == null) throw new Net.AuthException();
+        if ("0".equals(String.valueOf(ui.opt("auth")))) throw new Net.AuthException();
         return ui;
     }
 
@@ -71,7 +87,7 @@ public final class Xtream {
     }
 
     public static List<Cat> categories(String type) throws Exception {
-        JSONArray a = new JSONArray(Net.readAll(api(catAction(type), null)));
+        JSONArray a = new JSONArray(Net.readAll(api(catAction(type), null), 60));
         List<Cat> l = new ArrayList<>();
         for (int i = 0; i < a.length(); i++) {
             JSONObject o = a.optJSONObject(i);
@@ -93,6 +109,20 @@ public final class Xtream {
         return r.nextString();
     }
 
+    /** First string of a JSON array (or the string itself). */
+    private static String firstOf(JsonReader r) throws IOException {
+        JsonToken t = r.peek();
+        if (t == JsonToken.STRING) return r.nextString();
+        if (t != JsonToken.BEGIN_ARRAY) { r.skipValue(); return ""; }
+        String out = "";
+        r.beginArray();
+        while (r.hasNext()) {
+            if (out.isEmpty() && r.peek() == JsonToken.STRING) out = r.nextString(); else r.skipValue();
+        }
+        r.endArray();
+        return out;
+    }
+
     private static Item readItem(JsonReader r, String type) throws IOException {
         Item it = new Item();
         it.type = type;
@@ -108,6 +138,7 @@ public final class Xtream {
             else if (k.equals("added") || k.equals("last_modified")) { try { it.added = Long.parseLong(str(r)); } catch (Exception ignored) { } }
             else if (k.equals("rating")) rating = str(r);
             else if (k.equals("year")) year = str(r);
+            else if (k.equals("backdrop_path")) { if (it.backdrop.isEmpty()) it.backdrop = firstOf(r); else r.skipValue(); }
             else r.skipValue();
         }
         r.endObject();
@@ -133,9 +164,10 @@ public final class Xtream {
     }
 
     public static List<Item> items(String type, String catId) throws Exception {
-        HttpURLConnection c = Net.open(api(listAction(type), "&category_id=" + enc(catId)));
         List<Item> out = new ArrayList<>();
-        try { parse(c.getInputStream(), type, null, 6000, out); } finally { c.disconnect(); }
+        try (Response resp = Net.open(api(listAction(type), "&category_id=" + enc(catId)), 120)) {
+            parse(resp.body().byteStream(), type, null, 6000, out);
+        }
         return out;
     }
 
@@ -146,15 +178,14 @@ public final class Xtream {
         File f = allFile(type);
         if (!force && f.exists() && System.currentTimeMillis() - f.lastModified() < MAX_AGE) return;
         File tmp = new File(cacheDir, "all_" + type + ".tmp");
-        HttpURLConnection c = Net.open(api(listAction(type), null));
-        try {
-            InputStream in = c.getInputStream();
+        try (Response resp = Net.open(api(listAction(type), null), 300)) {
+            InputStream in = resp.body().byteStream();
             OutputStream out = new FileOutputStream(tmp);
             try {
                 byte[] buf = new byte[16384]; int n;
                 while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
             } finally { out.close(); }
-        } finally { c.disconnect(); }
+        }
         if (f.exists()) f.delete();
         tmp.renameTo(f);
     }
@@ -198,12 +229,12 @@ public final class Xtream {
     }
 
     // ---------- details / epg / urls ----------
-    public static JSONObject vodInfo(String id) throws Exception { return new JSONObject(Net.readAll(api("get_vod_info", "&vod_id=" + enc(id)))); }
-    public static JSONObject seriesInfo(String id) throws Exception { return new JSONObject(Net.readAll(api("get_series_info", "&series_id=" + enc(id)))); }
+    public static JSONObject vodInfo(String id) throws Exception { return new JSONObject(Net.readAll(api("get_vod_info", "&vod_id=" + enc(id)), 30)); }
+    public static JSONObject seriesInfo(String id) throws Exception { return new JSONObject(Net.readAll(api("get_series_info", "&series_id=" + enc(id)), 60)); }
 
     /** returns {now, next} (either may be empty) */
     public static String[] epg(String streamId) throws Exception {
-        JSONObject o = new JSONObject(Net.readAll(api("get_short_epg", "&stream_id=" + enc(streamId) + "&limit=2")));
+        JSONObject o = new JSONObject(Net.readAll(api("get_short_epg", "&stream_id=" + enc(streamId) + "&limit=2"), 30));
         JSONArray l = o.optJSONArray("epg_listings");
         String[] r = {"", ""};
         if (l == null) return r;

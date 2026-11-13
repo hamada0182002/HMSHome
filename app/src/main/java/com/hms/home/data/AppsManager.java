@@ -17,7 +17,7 @@ import java.util.Map;
 
 /** Finds every installed app that can be launched (normal + TV launcher entries). */
 public final class AppsManager {
-    public static class App { public String pkg, label; public Intent launch; public Drawable icon; }
+    public static class App { public String pkg, label; public Intent launch; public Drawable icon, banner; }
 
     private static List<App> cache;
 
@@ -38,6 +38,11 @@ public final class AppsManager {
                 a.pkg = pkg;
                 a.label = String.valueOf(ri.loadLabel(pm));
                 a.icon = ri.loadIcon(pm);
+                try {
+                    Drawable bn = ri.activityInfo.loadBanner(pm);
+                    if (bn == null && ri.activityInfo.applicationInfo != null) bn = ri.activityInfo.applicationInfo.loadBanner(pm);
+                    a.banner = bn;
+                } catch (Throwable ignored) { }
                 a.launch = new Intent(Intent.ACTION_MAIN).addCategory(cat)
                         .setClassName(pkg, ri.activityInfo.name).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
                 map.put(pkg, a);

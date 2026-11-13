@@ -3,14 +3,14 @@ package com.hms.home.ui;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
-import android.graphics.drawable.Drawable;
+import android.graphics.Color;
 import android.os.Bundle;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
-import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import com.hms.home.R;
@@ -23,12 +23,21 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+/**
+ * The launcher home (light Google-TV-like look):
+ *  top bar (clock, Wi-Fi, device settings, HMS settings) -> hero banners -> apps bar -> shortcuts -> poster rows.
+ */
 public class HomeActivity extends BaseActivity {
     private LinearLayout rows;
-    private Row rFav, rRecent, rCont, rLive, rMovies, rSeries;
+    private CardAdapter hero, apps, shortcuts, recent;
+    private RecyclerView appsRv;
+    private TileAdapter tCont, tFav, tMovies, tSeries;
+    private final List<View[]> titled = new ArrayList<>();   // {title, list} pairs that are hidden when empty
+    private TextView tContT, tFavT, tMoviesT, tSeriesT, tRecentT;
+    private RecyclerView rCont, rFav, rMovies, rSeries, rRecent;
+    private boolean receiverOn, focusSet;
     private static List<Item> mMovies, mSeries;
     private static long memoAt;
-    private boolean receiverOn;
 
     public static void invalidateMemo() { mMovies = null; mSeries = null; memoAt = 0; }
 
@@ -36,25 +45,21 @@ public class HomeActivity extends BaseActivity {
         @Override public void onReceive(Context c, Intent i) { AppsManager.invalidate(); refresh(); }
     };
 
-    private class Row {
-        final TextView title; final RecyclerView rv; final TileAdapter ad;
-        Row(String t, int w, int h, boolean icon, TileAdapter.Listener l) {
-            title = Ui.label(HomeActivity.this, t, 20, R.color.white, true);
-            title.setPadding(Ui.dp(HomeActivity.this, 12), Ui.dp(HomeActivity.this, 16), 0, Ui.dp(HomeActivity.this, 2));
-            rv = new RecyclerView(HomeActivity.this);
-            rv.setClipChildren(false);
-            rv.setPadding(Ui.dp(HomeActivity.this, 6), Ui.dp(HomeActivity.this, 10), Ui.dp(HomeActivity.this, 6), Ui.dp(HomeActivity.this, 14));
-            rv.setLayoutManager(new LinearLayoutManager(HomeActivity.this, LinearLayoutManager.HORIZONTAL, false));
-            ad = new TileAdapter(w, h, icon, l);
-            rv.setAdapter(ad);
-            rv.setClipToPadding(false);
-            rows.addView(title, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-            rows.addView(rv, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-            show(false);
+    // ---------------- listeners ----------------
+    private final CardAdapter.Listener cl = new CardAdapter.Listener() {
+        @Override public void click(CardAdapter.Card k) {
+            Object d = k.data;
+            if (d instanceof AppsManager.App) {
+                if (!AppsManager.launch(HomeActivity.this, (AppsManager.App) d)) toast("تعذر فتح التطبيق");
+            } else if (d instanceof Item) {
+                Item it = (Item) d;
+                if (k.sub != null && k.sub.startsWith("Resume")) Nav.play(HomeActivity.this, it); else Nav.open(HomeActivity.this, it);
+            } else if (d instanceof String) Nav.section(HomeActivity.this, (String) d);
         }
-        void show(boolean s) { int v = s ? View.VISIBLE : View.GONE; title.setVisibility(v); rv.setVisibility(v); }
-        void set(List<TileAdapter.Tile> l) { ad.set(l); show(!l.isEmpty()); }
-    }
+        @Override public void menu(CardAdapter.Card k) {
+            if (k.data instanceof AppsManager.App) AppMenu.show(HomeActivity.this, (AppsManager.App) k.data, new Runnable() { @Override public void run() { refresh(); } });
+        }
+    };
 
     private final TileAdapter.Listener tl = new TileAdapter.Listener() {
         @Override public void click(TileAdapter.Tile t, int pos) {
@@ -64,13 +69,11 @@ public class HomeActivity extends BaseActivity {
             } else if (d instanceof Item) {
                 Item it = (Item) d;
                 if (t.sub != null && t.sub.startsWith("Resume")) Nav.play(HomeActivity.this, it); else Nav.open(HomeActivity.this, it);
-            } else if (d instanceof String) Nav.section(HomeActivity.this, (String) d);
+            }
         }
         @Override public void menu(TileAdapter.Tile t, int pos) {
-            if (t.data instanceof AppsManager.App) AppMenu.show(HomeActivity.this, (AppsManager.App) t.data, new Runnable() { @Override public void run() { refresh(); } });
-            else if (t.data instanceof Item) {
-                Item it = (Item) t.data;
-                boolean f = Store.toggleFav(it);
+            if (t.data instanceof Item) {
+                boolean f = Store.toggleFav((Item) t.data);
                 Toast.makeText(HomeActivity.this, f ? "Added to favorites" : "Removed from favorites", Toast.LENGTH_SHORT).show();
                 refresh();
             }
@@ -78,27 +81,86 @@ public class HomeActivity extends BaseActivity {
         @Override public void focus(TileAdapter.Tile t, int pos) { }
     };
 
+    // ---------------- building the screen ----------------
+    private RecyclerView horizontalList(RecyclerView.Adapter<?> ad, int padLeftDp) {
+        RecyclerView rv = new RecyclerView(this);
+        rv.setClipChildren(false);
+        rv.setClipToPadding(false);
+        rv.setPadding(Ui.dp(this, padLeftDp), Ui.dp(this, 6), Ui.dp(this, 24), Ui.dp(this, 10));
+        rv.setLayoutManager(new LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false));
+        rv.setAdapter(ad);
+        return rv;
+    }
+
+    private TextView sectionTitle(String t) {
+        TextView tv = Ui.label(this, t, 20, R.color.h_ink, true);
+        tv.setPadding(Ui.dp(this, 56), Ui.dp(this, 10), 0, Ui.dp(this, 0));
+        return tv;
+    }
+
+    private void bindIcon(int id, final Runnable r, int tint) {
+        ImageView v = findViewById(id);
+        v.setColorFilter(tint);
+        v.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View x) { r.run(); } });
+    }
+
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
+        getWindow().setBackgroundDrawableResource(R.drawable.bg_home);
         setContentView(R.layout.activity_home);
         rows = findViewById(R.id.rows);
-        LinearLayout nav = findViewById(R.id.nav);
-        TextView search = Ui.navIcon(this);
-        search.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { Nav.section(HomeActivity.this, "search"); } });
-        nav.addView(search);
-        String[][] items = {{"Home", ""}, {"Live TV", "live"}, {"Movies", "movie"}, {"Series", "series"}, {"Apps", "apps"}, {"Settings", "settings"}};
-        for (final String[] it : items) {
-            TextView t = Ui.navItem(this, it[0]);
-            if (it[1].isEmpty()) t.setSelected(true);
-            else t.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { Nav.section(HomeActivity.this, it[1]); } });
-            nav.addView(t);
+
+        int tint = Color.parseColor("#4A5468");
+        bindIcon(R.id.btnWifi, new Runnable() { @Override public void run() { Nav.wifiSettings(HomeActivity.this); } }, tint);
+        bindIcon(R.id.btnDevice, new Runnable() { @Override public void run() { Nav.deviceSettings(HomeActivity.this); } }, tint);   // Android settings
+        bindIcon(R.id.btnApp, new Runnable() { @Override public void run() { Nav.section(HomeActivity.this, "settings"); } }, tint);  // HMS HOME settings
+
+        // 1) hero banners
+        hero = new CardAdapter(CardAdapter.HERO, cl);
+        rows.addView(horizontalList(hero, 40), new LinearLayout.LayoutParams(-1, -2));
+
+        // 2) apps bar: rounded translucent container
+        apps = new CardAdapter(CardAdapter.APP, cl);
+        appsRv = horizontalList(apps, 14);
+        appsRv.setPadding(Ui.dp(this, 14), Ui.dp(this, 14), Ui.dp(this, 14), Ui.dp(this, 14));
+        LinearLayout bar = new LinearLayout(this);
+        bar.setBackgroundResource(R.drawable.bg_apps_bar);
+        bar.setClipChildren(false);
+        bar.addView(appsRv, new LinearLayout.LayoutParams(-1, -2));
+        LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(-1, -2);
+        bp.setMargins(Ui.dp(this, 48), Ui.dp(this, 6), Ui.dp(this, 48), 0);
+        rows.addView(bar, bp);
+
+        // 3) shortcuts (Live TV / Movies / Series / Search / All apps / Accounts)
+        shortcuts = new CardAdapter(CardAdapter.SHORTCUT, cl);
+        rows.addView(horizontalList(shortcuts, 40), new LinearLayout.LayoutParams(-1, -2));
+        List<CardAdapter.Card> sc = new ArrayList<>();
+        sc.add(new CardAdapter.Card("Live TV", "live").vec(R.drawable.ic_tv).colors(0xFF5B5CE6, 0xFF8E54E9));
+        sc.add(new CardAdapter.Card("Movies", "movie").vec(R.drawable.ic_movie).colors(0xFFE5484D, 0xFFF2994A));
+        sc.add(new CardAdapter.Card("Series", "series").vec(R.drawable.ic_series).colors(0xFF0E9F8E, 0xFF38C172));
+        sc.add(new CardAdapter.Card("Search", "search").vec(R.drawable.ic_search_white).colors(0xFF2F6BFF, 0xFF4FB3FF));
+        sc.add(new CardAdapter.Card("All apps", "apps").vec(R.drawable.ic_apps).colors(0xFF3A4254, 0xFF596277));
+        sc.add(new CardAdapter.Card("IPTV accounts", "login").vec(R.drawable.ic_person).colors(0xFF8A5A44, 0xFFC08457));
+        shortcuts.set(sc);
+
+        // 4) poster rows (dark text on the light background)
+        tCont = new TileAdapter(140, 210, false, true, tl);
+        tMovies = new TileAdapter(140, 210, false, true, tl);
+        tSeries = new TileAdapter(140, 210, false, true, tl);
+        tFav = new TileAdapter(190, 110, true, true, tl);
+        recent = new CardAdapter(CardAdapter.APP, cl);
+
+        tContT = sectionTitle("Continue watching"); rCont = horizontalList(tCont, 48);
+        tMoviesT = sectionTitle("New movies"); rMovies = horizontalList(tMovies, 48);
+        tSeriesT = sectionTitle("New series"); rSeries = horizontalList(tSeries, 48);
+        tFavT = sectionTitle("Favorite channels"); rFav = horizontalList(tFav, 48);
+        tRecentT = sectionTitle("Recent apps"); rRecent = horizontalList(recent, 48);
+        for (View[] p : new View[][]{{tContT, rCont}, {tMoviesT, rMovies}, {tSeriesT, rSeries}, {tFavT, rFav}, {tRecentT, rRecent}}) {
+            rows.addView(p[0], new LinearLayout.LayoutParams(-1, -2));
+            rows.addView(p[1], new LinearLayout.LayoutParams(-1, -2));
+            p[0].setVisibility(View.GONE); p[1].setVisibility(View.GONE);
+            titled.add(p);
         }
-        rFav = new Row("Your apps", 100, 100, true, tl);
-        rCont = new Row("Continue watching", 140, 210, false, tl);
-        rLive = new Row("Live TV", 190, 110, true, tl);
-        rMovies = new Row("New movies", 140, 210, false, tl);
-        rSeries = new Row("Series", 140, 210, false, tl);
-        rRecent = new Row("Recent apps", 100, 100, true, tl);
     }
 
     @Override protected void onStart() {
@@ -115,9 +177,9 @@ public class HomeActivity extends BaseActivity {
 
     @Override public void onBackPressed() { /* we are the launcher: never close */ }
 
-    private TileAdapter.Tile sectionTile(String title, String sub, String data) {
-        Drawable d = ContextCompat.getDrawable(this, R.drawable.ic_launcher);
-        return new TileAdapter.Tile(title, sub, null, d, data);
+    private void show(View title, View list, boolean s) {
+        int v = s ? View.VISIBLE : View.GONE;
+        title.setVisibility(v); list.setVisibility(v);
     }
 
     private List<TileAdapter.Tile> itemTiles(List<Item> l, boolean resume) {
@@ -129,36 +191,56 @@ public class HomeActivity extends BaseActivity {
         return t;
     }
 
+    private CardAdapter.Card appCard(AppsManager.App a) {
+        return new CardAdapter.Card(a.label, a).icon(a.icon).banner(a.banner);
+    }
+
+    // ---------------- data ----------------
     private void refresh() {
         cancelAll();
         run(new java.util.concurrent.Callable<List<AppsManager.App>>() {
             @Override public List<AppsManager.App> call() { return AppsManager.load(getApplicationContext()); }
         }, new Net.Ok<List<AppsManager.App>>() {
-            @Override public void ok(List<AppsManager.App> apps) {
-                List<TileAdapter.Tile> f = new ArrayList<>();
-                for (String p : Store.favApps()) { AppsManager.App a = AppsManager.find(apps, p); if (a != null) f.add(new TileAdapter.Tile(a.label, "", null, a.icon, a)); }
-                f.add(sectionTile("Add apps", "Open APPS", "apps"));
-                rFav.set(f);
-                List<TileAdapter.Tile> r = new ArrayList<>();
-                for (String p : Store.recentApps()) { AppsManager.App a = AppsManager.find(apps, p); if (a != null) r.add(new TileAdapter.Tile(a.label, "", null, a.icon, a)); }
-                rRecent.set(r);
+            @Override public void ok(List<AppsManager.App> all) {
+                List<CardAdapter.Card> f = new ArrayList<>();
+                for (String p : Store.favApps()) { AppsManager.App a = AppsManager.find(all, p); if (a != null) f.add(appCard(a)); }
+                if (f.isEmpty()) {
+                    // nothing pinned yet: show the first installed apps so the bar is never empty
+                    for (int i = 0; i < all.size() && i < 12; i++) f.add(appCard(all.get(i)));
+                }
+                f.add(new CardAdapter.Card("All apps", "apps").vec(R.drawable.ic_apps).colors(0xFF3A4254, 0xFF596277));
+                apps.set(f);
+                if (!focusSet) { focusSet = true; appsRv.post(new Runnable() { @Override public void run() {
+                    RecyclerView.ViewHolder vh = appsRv.findViewHolderForAdapterPosition(0);
+                    if (vh != null) vh.itemView.requestFocus();
+                } }); }
+
+                List<CardAdapter.Card> r = new ArrayList<>();
+                for (String p : Store.recentApps()) { AppsManager.App a = AppsManager.find(all, p); if (a != null) r.add(appCard(a)); }
+                recent.set(r);
+                show(tRecentT, rRecent, !r.isEmpty());
             }
         }, null);
 
-        rCont.set(itemTiles(Store.continueWatching(), true));
+        List<Item> cont = Store.continueWatching();
+        tCont.set(itemTiles(cont, true));
+        show(tContT, rCont, !cont.isEmpty());
+        List<TileAdapter.Tile> favCh = itemTiles(Store.favItems("live"), false);
+        tFav.set(favCh);
+        show(tFavT, rFav, !favCh.isEmpty());
 
         if (!Store.hasLogin()) {
-            List<TileAdapter.Tile> l = new ArrayList<>();
-            l.add(sectionTile("IPTV Login", "Add your Xtream account", "login"));
-            rLive.set(l);
-            rMovies.set(new ArrayList<TileAdapter.Tile>());
-            rSeries.set(new ArrayList<TileAdapter.Tile>());
+            List<CardAdapter.Card> h = new ArrayList<>();
+            h.add(new CardAdapter.Card("IPTV login", "login").sub("Add your Xtream account").badge("START")
+                    .vec(R.drawable.ic_person).colors(0xFF2F6BFF, 0xFF7B5CFF));
+            hero.set(h);
+            tMovies.set(new ArrayList<TileAdapter.Tile>());
+            tSeries.set(new ArrayList<TileAdapter.Tile>());
+            show(tMoviesT, rMovies, false);
+            show(tSeriesT, rSeries, false);
             return;
         }
-        List<TileAdapter.Tile> live = new ArrayList<>();
-        live.add(sectionTile("LIVE TV", "All channels", "live"));
-        live.addAll(itemTiles(Store.favItems("live"), false));
-        rLive.set(live);
+        fillHero(cont);
 
         if (mMovies != null && System.currentTimeMillis() - memoAt < 600000) { fillIptv(); return; }
         run(new java.util.concurrent.Callable<List<List<Item>>>() {
@@ -170,12 +252,38 @@ public class HomeActivity extends BaseActivity {
         }, new Net.Ok<List<List<Item>>>() {
             @Override public void ok(List<List<Item>> r) { mMovies = r.get(0); mSeries = r.get(1); memoAt = System.currentTimeMillis(); fillIptv(); }
         }, new Net.Fail() {
-            @Override public void fail(Exception e) { Toast.makeText(HomeActivity.this, Net.msg(e), Toast.LENGTH_LONG).show(); }
+            @Override public void fail(Exception e) { Toast.makeText(HomeActivity.this, Net.msg(e) + "\n[" + Net.detail(e) + "]", Toast.LENGTH_LONG).show(); }
         });
     }
 
     private void fillIptv() {
-        rMovies.set(itemTiles(mMovies, false));
-        rSeries.set(itemTiles(mSeries, false));
+        tMovies.set(itemTiles(mMovies, false));
+        tSeries.set(itemTiles(mSeries, false));
+        show(tMoviesT, rMovies, !mMovies.isEmpty());
+        show(tSeriesT, rSeries, !mSeries.isEmpty());
+        fillHero(Store.continueWatching());
+    }
+
+    /** Hero banners: continue watching first, then the newest series and movies. Section cards while nothing is loaded. */
+    private void fillHero(List<Item> cont) {
+        List<CardAdapter.Card> h = new ArrayList<>();
+        for (int i = 0; i < cont.size() && i < 3; i++) {
+            Item it = cont.get(i);
+            h.add(new CardAdapter.Card(it.name, it).sub("Resume " + Ui.fmt(Store.getPosition(it))).badge("CONTINUE").img(it.backdrop.isEmpty() ? it.icon : it.backdrop));
+        }
+        if (mSeries != null) for (int i = 0; i < mSeries.size() && i < 8; i++) {
+            Item it = mSeries.get(i);
+            h.add(new CardAdapter.Card(it.name, it).sub("HMS IPTV").badge("NEW SERIES").img(it.backdrop.isEmpty() ? it.icon : it.backdrop));
+        }
+        if (mMovies != null) for (int i = 0; i < mMovies.size() && i < 8; i++) {
+            Item it = mMovies.get(i);
+            h.add(new CardAdapter.Card(it.name, it).sub(it.extra.isEmpty() ? "HMS IPTV" : it.extra).badge("NEW MOVIE").img(it.icon));
+        }
+        if (h.isEmpty()) {
+            h.add(new CardAdapter.Card("Live TV", "live").sub("All channels").vec(R.drawable.ic_tv).colors(0xFF5B5CE6, 0xFF8E54E9));
+            h.add(new CardAdapter.Card("Movies", "movie").sub("Browse the library").vec(R.drawable.ic_movie).colors(0xFFE5484D, 0xFFF2994A));
+            h.add(new CardAdapter.Card("Series", "series").sub("Browse the library").vec(R.drawable.ic_series).colors(0xFF0E9F8E, 0xFF38C172));
+        }
+        hero.set(h);
     }
 }

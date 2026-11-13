@@ -13,6 +13,25 @@ import androidx.core.content.ContextCompat;
 import com.hms.home.R;
 
 public final class Ui {
+    public static int sw(Context c) { return c.getResources().getDisplayMetrics().widthPixels; }
+    public static int sh(Context c) { return c.getResources().getDisplayMetrics().heightPixels; }
+
+    /** Rounded solid shape. */
+    public static android.graphics.drawable.GradientDrawable rounded(int color, float radiusPx) {
+        android.graphics.drawable.GradientDrawable g = new android.graphics.drawable.GradientDrawable();
+        g.setColor(color);
+        g.setCornerRadius(radiusPx);
+        return g;
+    }
+
+    /** Rounded two-colour diagonal gradient. */
+    public static android.graphics.drawable.GradientDrawable gradient(int c1, int c2, float radiusPx) {
+        android.graphics.drawable.GradientDrawable g = new android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TL_BR, new int[]{c1, c2});
+        g.setCornerRadius(radiusPx);
+        return g;
+    }
+
     public static int dp(Context c, float v) { return Math.round(v * c.getResources().getDisplayMetrics().density); }
 
     public static TextView label(Context c, String s, float sp, int colorRes, boolean bold) {

@@ -35,10 +35,14 @@ public class TileAdapter extends RecyclerView.Adapter<TileAdapter.VH> {
 
     private final int w, h;
     private final boolean iconMode;
+    private boolean light;
     private final Listener l;
     private List<Tile> list = new ArrayList<>();
 
     public TileAdapter(int wDp, int hDp, boolean iconMode, Listener l) { this.w = wDp; this.h = hDp; this.iconMode = iconMode; this.l = l; }
+
+    /** Light launcher home: dark texts and light card frames. */
+    public TileAdapter(int wDp, int hDp, boolean iconMode, boolean light, Listener l) { this(wDp, hDp, iconMode, l); this.light = light; }
 
     public void set(List<Tile> t) { list = t; notifyDataSetChanged(); }
     public int size() { return list.size(); }
@@ -79,7 +83,7 @@ public class TileAdapter extends RecyclerView.Adapter<TileAdapter.VH> {
             // app icon: round, Google TV style
             int pd = Ui.dp(c, w * 0.2f);
             img.setScaleType(ImageView.ScaleType.FIT_CENTER);
-            img.setBackgroundResource(R.drawable.bg_icon_circle);
+            img.setBackgroundResource(light ? R.drawable.bg_icon_circle_l : R.drawable.bg_icon_circle);
             img.setPadding(pd, pd, pd, pd);
             Ui.clip(img, 0, true);
             title.setGravity(Gravity.CENTER_HORIZONTAL);
@@ -88,16 +92,20 @@ public class TileAdapter extends RecyclerView.Adapter<TileAdapter.VH> {
             // channel logo: light rounded card
             int pd = Ui.dp(c, 12);
             img.setScaleType(ImageView.ScaleType.FIT_CENTER);
-            img.setBackgroundResource(R.drawable.bg_logo);
+            img.setBackgroundResource(light ? R.drawable.bg_logo_l : R.drawable.bg_logo);
             img.setPadding(pd, pd, pd, pd);
             Ui.clip(img, Ui.dp(c, 16), false);
         } else {
             // poster: rounded corners with a white frame on focus
             int pd = Ui.dp(c, 3);
             img.setScaleType(ImageView.ScaleType.CENTER_CROP);
-            img.setBackgroundResource(R.drawable.bg_poster);
+            img.setBackgroundResource(light ? R.drawable.bg_poster_l : R.drawable.bg_poster);
             img.setPadding(pd, pd, pd, pd);
             Ui.clip(img, Ui.dp(c, 16), false);
+        }
+        if (light) {
+            title.setTextColor(androidx.core.content.ContextCompat.getColor(c, R.color.h_ink));
+            sub.setTextColor(androidx.core.content.ContextCompat.getColor(c, R.color.h_ink2));
         }
         return new VH(v);
     }

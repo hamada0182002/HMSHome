@@ -24,6 +24,19 @@ public final class Nav {
         a.startActivity(i);
     }
 
+    /** Android's own settings (not this app's settings). */
+    public static void deviceSettings(Activity a) { systemScreen(a, android.provider.Settings.ACTION_SETTINGS); }
+
+    /** Wi-Fi / network settings. */
+    public static void wifiSettings(Activity a) { systemScreen(a, android.provider.Settings.ACTION_WIFI_SETTINGS); }
+
+    private static void systemScreen(Activity a, String action) {
+        try { a.startActivity(new Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); return; }
+        catch (Exception ignored) { }
+        try { a.startActivity(new Intent(android.provider.Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); }
+        catch (Exception e) { android.widget.Toast.makeText(a, "إعدادات الجهاز مش متاحة على الجهاز ده", android.widget.Toast.LENGTH_LONG).show(); }
+    }
+
     /** Opens details for movies/series, plays channels/episodes directly. */
     public static void open(Activity a, Item it) {
         if (it.type.equals("movie") || it.type.equals("series")) {

@@ -12,7 +12,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.HttpURLConnection;
+import okhttp3.Response;
 import java.security.MessageDigest;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -82,15 +82,13 @@ public final class ImageLoader {
         try {
             File f = new File(dir, hash(url));
             if (!f.exists()) {
-                HttpURLConnection c = null;
-                try {
-                    c = Net.open(url);
-                    InputStream in = c.getInputStream();
+                try (Response resp = Net.openWeb(url, Net.UA, "image/*,*/*", 25)) {
+                    InputStream in = resp.body().byteStream();
                     File tmp = new File(dir, hash(url) + ".t");
                     OutputStream out = new FileOutputStream(tmp);
                     try { byte[] buf = new byte[8192]; int n; while ((n = in.read(buf)) > 0) out.write(buf, 0, n); } finally { out.close(); }
                     tmp.renameTo(f);
-                } finally { if (c != null) c.disconnect(); }
+                }
             }
             BitmapFactory.Options o = new BitmapFactory.Options();
             o.inJustDecodeBounds = true;

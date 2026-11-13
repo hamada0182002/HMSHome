@@ -5,7 +5,7 @@ import org.json.JSONObject;
 
 /** One channel / movie / series / episode. type = live | movie | series | episode */
 public class Item {
-    public String type = "", id = "", name = "", icon = "", ext = "", cat = "", extra = "";
+    public String type = "", id = "", name = "", icon = "", ext = "", cat = "", extra = "", backdrop = "";
     public long added;
 
     public String key() { return type + ":" + id; }
@@ -14,7 +14,7 @@ public class Item {
         try {
             JSONObject o = new JSONObject();
             o.put("t", type); o.put("i", id); o.put("n", name); o.put("c", icon);
-            o.put("e", ext); o.put("x", extra); o.put("a", added); o.put("g", cat);
+            o.put("e", ext); o.put("x", extra); o.put("a", added); o.put("g", cat); o.put("b", backdrop);
             return o;
         } catch (JSONException e) { return new JSONObject(); }
     }
@@ -23,7 +23,7 @@ public class Item {
         Item it = new Item();
         it.type = o.optString("t"); it.id = o.optString("i"); it.name = o.optString("n");
         it.icon = o.optString("c"); it.ext = o.optString("e"); it.extra = o.optString("x");
-        it.added = o.optLong("a"); it.cat = o.optString("g");
+        it.added = o.optLong("a"); it.cat = o.optString("g"); it.backdrop = o.optString("b");
         return it;
     }
 }

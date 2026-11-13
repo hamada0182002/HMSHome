@@ -17,21 +17,79 @@ public final class Store {
 
     public static void init(Context c) { p = c.getApplicationContext().getSharedPreferences("hms", Context.MODE_PRIVATE); }
 
-    // ---- login ----
-    public static void setSession(String s, String u, String pw) { sS = s; sU = u; sP = pw; }
-    public static String server() { return sS != null ? sS : p.getString("srv", ""); }
-    public static String user() { return sU != null ? sU : Crypt.dec(p.getString("usr", "")); }
-    public static String pass() { return sP != null ? sP : Crypt.dec(p.getString("pwd", "")); }
-    public static boolean hasLogin() { return !server().isEmpty() && !user().isEmpty(); }
-    public static boolean isSaved() { return p.contains("usr"); }
-    public static void saveLogin(String s, String u, String pw) {
-        p.edit().putString("srv", s).putString("usr", Crypt.enc(u)).putString("pwd", Crypt.enc(pw)).apply();
-        setSession(s, u, pw);
-    }
-    public static void logout() {
+    // ---- accounts (several Xtream subscriptions, like HMS Player) ----
+    private static List<Account> accCache;
+
+    /** Moves the old single-login keys (srv / usr / pwd) into the accounts list once. */
+    private static void migrate() {
+        if (!p.contains("usr") || p.contains("accounts")) return;
+        String s = p.getString("srv", ""), u = Crypt.dec(p.getString("usr", "")), pw = Crypt.dec(p.getString("pwd", ""));
+        List<Account> l = new ArrayList<>();
+        if (!s.isEmpty() && !u.isEmpty()) {
+            Account a = new Account(java.util.UUID.randomUUID().toString(), hostOf(s), s, u, pw);
+            l.add(a);
+            writeAccounts(l);
+            p.edit().putString("active", a.id).apply();
+        }
         p.edit().remove("srv").remove("usr").remove("pwd").apply();
-        sS = sU = sP = null;
     }
+
+    private static String hostOf(String s) {
+        try { String h = android.net.Uri.parse(s).getHost(); return h == null ? "IPTV" : h; } catch (Exception e) { return "IPTV"; }
+    }
+
+    public static synchronized List<Account> accounts() {
+        if (accCache != null) return accCache;
+        migrate();
+        List<Account> l = new ArrayList<>();
+        try {
+            // the whole list (including passwords) is stored encrypted
+            JSONArray a = new JSONArray(Crypt.dec(p.getString("accounts", "")));
+            for (int i = 0; i < a.length(); i++) l.add(Account.fromJson(a.getJSONObject(i)));
+        } catch (Exception ignored) { }
+        accCache = l;
+        return l;
+    }
+
+    private static void writeAccounts(List<Account> l) {
+        JSONArray a = new JSONArray();
+        for (Account x : l) a.put(x.toJson());
+        p.edit().putString("accounts", Crypt.enc(a.toString())).apply();
+        accCache = new ArrayList<>(l);
+    }
+
+    public static synchronized Account active() {
+        List<Account> l = accounts();
+        String id = p.getString("active", null);
+        for (Account a : l) if (a.id.equals(id)) return a;
+        return l.isEmpty() ? null : l.get(0);
+    }
+
+    public static void setActive(Account a) { p.edit().putString("active", a == null ? null : a.id).apply(); }
+
+    public static synchronized void saveAccount(Account a, boolean activate) {
+        List<Account> l = new ArrayList<>(accounts());
+        int i = -1;
+        for (int k = 0; k < l.size(); k++) if (l.get(k).id.equals(a.id)) i = k;
+        if (i >= 0) l.set(i, a); else l.add(a);
+        writeAccounts(l);
+        Account act = active();
+        if (activate || act == null || act.id.equals(a.id)) setActive(a);
+    }
+
+    public static synchronized void deleteAccount(String id) {
+        List<Account> l = new ArrayList<>();
+        for (Account a : accounts()) if (!a.id.equals(id)) l.add(a);
+        Account act = active();
+        writeAccounts(l);
+        if (act != null && act.id.equals(id)) setActive(l.isEmpty() ? null : l.get(0));
+    }
+
+    // Convenience for the active account (used by Xtream)
+    public static String server() { Account a = active(); return a == null ? "" : a.server; }
+    public static String user() { Account a = active(); return a == null ? "" : a.user; }
+    public static String pass() { Account a = active(); return a == null ? "" : a.pass; }
+    public static boolean hasLogin() { return active() != null; }
 
     // ---- simple string lists ----
     private static List<String> readList(String k) {
