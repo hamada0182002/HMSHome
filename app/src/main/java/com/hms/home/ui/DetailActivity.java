@@ -177,7 +177,7 @@ public class DetailActivity extends BaseActivity {
         if (focusEp != null) {
             for (int s = 0; s < seasonKeys.size() && focusIdx < 0; s++) {
                 List<Item> l = seasons.get(seasonKeys.get(s));
-                for (int i = 0; i < l.size(); i++) if (l.get(i).id.equals(focusEp)) { curSeason = s; focusIdx = i; break; }
+                for (int n = 0; n < l.size(); n++) if (l.get(n).id.equals(focusEp)) { curSeason = s; focusIdx = n; break; }
             }
         }
         seasonAd.setSelected(curSeason);
