@@ -192,6 +192,17 @@ public final class Store {
         return items;
     }
 
+    // ---- which server folder feeds "new movies / new series" on the home ----
+    /** {id, name} of the chosen category for type "movie" / "series", or null = automatic (latest added). */
+    public static String[] homeCat(String type) {
+        String id = p.getString("homecat_" + type, "");
+        return id.isEmpty() ? null : new String[]{id, p.getString("homecatname_" + type, "")};
+    }
+    public static void setHomeCat(String type, String id, String name) {
+        if (id == null) p.edit().remove("homecat_" + type).remove("homecatname_" + type).apply();
+        else p.edit().putString("homecat_" + type, id).putString("homecatname_" + type, name).apply();
+    }
+
     // ---- settings ----
     /** 0 = normal, 1 = large (default), 2 = extra large */
     public static int fontLevel() { return p.getInt("font", 1); }

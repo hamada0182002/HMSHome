@@ -223,6 +223,19 @@ public final class Xtream {
         return out;
     }
 
+    /** Items for the home "new" rows: the folder chosen in Settings (server order / newest first), else the latest added. */
+    public static List<Item> homeItems(String type, int n) throws Exception {
+        String[] cat = Store.homeCat(type);
+        if (cat == null) { ensureAll(type, false); return latest(type, n); }
+        List<Item> l = items(type, cat[0]);
+        boolean dated = false;
+        for (Item it : l) if (it.added > 0) { dated = true; break; }
+        if (dated) Collections.sort(l, new Comparator<Item>() {   // stable: equal dates keep the server order
+            @Override public int compare(Item a, Item b) { return Long.compare(b.added, a.added); }
+        });
+        return l.size() > n ? new ArrayList<>(l.subList(0, n)) : l;
+    }
+
     public static void clearCache() {
         File[] fs = cacheDir.listFiles();
         if (fs != null) for (File f : fs) if (f.getName().startsWith("all_")) f.delete();

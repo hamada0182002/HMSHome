@@ -212,7 +212,7 @@ public class CardAdapter extends RecyclerView.Adapter<CardAdapter.VH> {
         if (mode == HERO) {
             vh.shade.setVisibility(View.VISIBLE);
             vh.ic.setLayoutParams(new FrameLayout.LayoutParams(-1, -1));
-            ImageLoader.load(vh.img, k.img, w, h);
+            ImageLoader.load(vh.img, k.img, w, h, true);
             return;
         }
         // APP tile

@@ -28,7 +28,7 @@ public final class ImageLoader {
     private static final ColorDrawable PH = new ColorDrawable(0xFF2E2820);
 
     public static void init(Context c) {
-        mem = new LruCache<String, Bitmap>(6 * 1024 * 1024) {
+        mem = new LruCache<String, Bitmap>(16 * 1024 * 1024) {
             @Override protected int sizeOf(String k, Bitmap b) { return b.getByteCount(); }
         };
         dir = new File(c.getCacheDir(), "img");
@@ -61,24 +61,31 @@ public final class ImageLoader {
         } catch (Exception e) { return String.valueOf(s.hashCode()); }
     }
 
-    public static void load(final ImageView v, final String url, final int reqW, final int reqH) {
-        v.setTag(url);
+    public static void load(ImageView v, String url, int reqW, int reqH) { load(v, url, reqW, reqH, false); }
+
+    /**
+     * hq = true: full-colour (ARGB_8888) decode for big hero banners (RGB_565 shows banding).
+     * The RAM cache key includes the size, so a small thumbnail of the same picture is never reused for a big card.
+     */
+    public static void load(final ImageView v, final String url, final int reqW, final int reqH, final boolean hq) {
+        final String key = url + "|" + reqW + "x" + reqH + (hq ? "|q" : "");
+        v.setTag(key);
         if (url == null || url.isEmpty() || !url.startsWith("http")) { v.setImageDrawable(PH); return; }
-        Bitmap b = mem.get(url);
+        Bitmap b = mem.get(key);
         if (b != null) { v.setImageBitmap(b); return; }
         v.setImageDrawable(PH);
         EX.execute(new Runnable() {
             @Override public void run() {
-                if (!url.equals(v.getTag())) return;
-                final Bitmap bm = fetch(url, reqW, reqH);
+                if (!key.equals(v.getTag())) return;
+                final Bitmap bm = fetch(url, reqW, reqH, hq);
                 if (bm == null) return;
-                mem.put(url, bm);
-                H.post(new Runnable() { @Override public void run() { if (url.equals(v.getTag())) v.setImageBitmap(bm); } });
+                mem.put(key, bm);
+                H.post(new Runnable() { @Override public void run() { if (key.equals(v.getTag())) v.setImageBitmap(bm); } });
             }
         });
     }
 
-    private static Bitmap fetch(String url, int w, int h) {
+    private static Bitmap fetch(String url, int w, int h, boolean hq) {
         try {
             File f = new File(dir, hash(url));
             if (!f.exists()) {
@@ -97,7 +104,7 @@ public final class ImageLoader {
             while (o.outWidth / (s * 2) >= w && o.outHeight / (s * 2) >= h) s *= 2;
             o = new BitmapFactory.Options();
             o.inSampleSize = s;
-            o.inPreferredConfig = Bitmap.Config.RGB_565;
+            o.inPreferredConfig = hq ? Bitmap.Config.ARGB_8888 : Bitmap.Config.RGB_565;
             return BitmapFactory.decodeFile(f.getAbsolutePath(), o);
         } catch (Throwable t) { return null; }
     }

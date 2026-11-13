@@ -52,6 +52,9 @@ public class SettingsActivity extends BaseActivity {
         r.add(new TextAdapter.Row("Check for updates", "Current version " + BuildConfig.VERSION_NAME + "  -  downloads and installs the newest version online", "update"));
         r.add(new TextAdapter.Row("IPTV accounts", Store.hasLogin() ? Store.active().name + "  |  " + Store.user() + " @ " + Store.server().replace("http://", "").replace("https://", "") + "   (" + Store.accounts().size() + ")" : "No account yet - add one", "account"));
         r.add(new TextAdapter.Row("Reload IPTV data", "Re-downloads channel / movie / series index next time", "reload"));
+        String[] hm = Store.homeCat("movie"), hs = Store.homeCat("series");
+        r.add(new TextAdapter.Row("Home: new movies from", hm == null ? "Latest added (automatic)" : "Folder: " + hm[1], "homemovie"));
+        r.add(new TextAdapter.Row("Home: new series from", hs == null ? "Latest added (automatic)" : "Folder: " + hs[1], "homeseries"));
         r.add(new TextAdapter.Row("Font size", FONT[Store.fontLevel()] + "  (press OK to change)", "font"));
         r.add(new TextAdapter.Row("Default aspect ratio", ASPECT[Store.aspect()], "aspect"));
         r.add(new TextAdapter.Row("Default subtitles", Store.subsDefault() ? "On" : "Off", "subs"));
@@ -69,6 +72,8 @@ public class SettingsActivity extends BaseActivity {
             case "account": startActivity(new Intent(this, LoginActivity.class)); break;
             case "reload": Xtream.clearCache(); HomeActivity.invalidateMemo(); toast("هيتم تحميل بيانات IPTV من جديد"); break;
             case "update": checkUpdate(); break;
+            case "homemovie": pickHomeCat("movie"); break;
+            case "homeseries": pickHomeCat("series"); break;
             case "font": Store.setFontLevel((Store.fontLevel() + 1) % 3); recreate(); break;
             case "aspect": Store.setAspect((Store.aspect() + 1) % 3); build(); break;
             case "subs": Store.setSubsDefault(!Store.subsDefault()); build(); break;
@@ -89,6 +94,33 @@ public class SettingsActivity extends BaseActivity {
                 break;
             default: break;
         }
+    }
+
+    /** Lets the user pick which server folder (category) feeds the "new" rows on the home. */
+    private void pickHomeCat(final String type) {
+        if (!Store.hasLogin()) { toast("سجّل دخول IPTV الأول"); return; }
+        toast("Loading folders…");
+        run(new Callable<List<Xtream.Cat>>() {
+            @Override public List<Xtream.Cat> call() throws Exception { return Xtream.categories(type); }
+        }, new Net.Ok<List<Xtream.Cat>>() {
+            @Override public void ok(final List<Xtream.Cat> cats) {
+                String[] names = new String[cats.size() + 1];
+                names[0] = "Latest added (automatic)";
+                for (int i = 0; i < cats.size(); i++) names[i + 1] = cats.get(i).name;
+                new AlertDialog.Builder(SettingsActivity.this)
+                        .setTitle(type.equals("movie") ? "Home: new movies from" : "Home: new series from")
+                        .setItems(names, new DialogInterface.OnClickListener() {
+                            @Override public void onClick(DialogInterface d, int w) {
+                                if (w == 0) Store.setHomeCat(type, null, null);
+                                else Store.setHomeCat(type, cats.get(w - 1).id, cats.get(w - 1).name);
+                                HomeActivity.invalidateMemo();
+                                build();
+                            }
+                        }).show();
+            }
+        }, new Net.Fail() {
+            @Override public void fail(Exception e) { showMsg("Couldn't load folders", Net.msg(e)); }
+        });
     }
 
     private void showMsg(String title, String msg) {

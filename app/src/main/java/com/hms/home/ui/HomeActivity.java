@@ -38,6 +38,8 @@ public class HomeActivity extends BaseActivity {
     private boolean receiverOn, focusSet;
     private static List<Item> mMovies, mSeries;
     private static long memoAt;
+    /** movie id -> wide backdrop url (from get_vod_info); a poster is small and looks pixelated when stretched into a wide card. */
+    private static final java.util.Map<String, String> backdrops = new java.util.HashMap<>();
 
     public static void invalidateMemo() { mMovies = null; mSeries = null; memoAt = 0; }
 
@@ -245,9 +247,7 @@ public class HomeActivity extends BaseActivity {
         if (mMovies != null && System.currentTimeMillis() - memoAt < 600000) { fillIptv(); return; }
         run(new java.util.concurrent.Callable<List<List<Item>>>() {
             @Override public List<List<Item>> call() throws Exception {
-                Xtream.ensureAll("movie", false);
-                Xtream.ensureAll("series", false);
-                return Arrays.asList(Xtream.latest("movie", 20), Xtream.latest("series", 20));
+                return Arrays.asList(Xtream.homeItems("movie", 20), Xtream.homeItems("series", 20));
             }
         }, new Net.Ok<List<List<Item>>>() {
             @Override public void ok(List<List<Item>> r) { mMovies = r.get(0); mSeries = r.get(1); memoAt = System.currentTimeMillis(); fillIptv(); }
@@ -257,11 +257,47 @@ public class HomeActivity extends BaseActivity {
     }
 
     private void fillIptv() {
+        String[] cm = Store.homeCat("movie"), cs = Store.homeCat("series");
+        tMoviesT.setText(cm != null && !cm[1].isEmpty() ? cm[1] : "New movies");
+        tSeriesT.setText(cs != null && !cs[1].isEmpty() ? cs[1] : "New series");
         tMovies.set(itemTiles(mMovies, false));
         tSeries.set(itemTiles(mSeries, false));
         show(tMoviesT, rMovies, !mMovies.isEmpty());
         show(tSeriesT, rSeries, !mSeries.isEmpty());
         fillHero(Store.continueWatching());
+        loadMovieBackdrops();
+    }
+
+    /** Fetches the wide picture for the movies shown in the hero (first 8) and refreshes the hero when done. */
+    private void loadMovieBackdrops() {
+        if (mMovies == null) return;
+        final List<Item> todo = new ArrayList<>();
+        for (int i = 0; i < mMovies.size() && i < 8; i++) {
+            Item it = mMovies.get(i);
+            if (it.backdrop.isEmpty() && !backdrops.containsKey(it.id)) todo.add(it);
+            else if (it.backdrop.isEmpty()) it.backdrop = backdrops.get(it.id);
+        }
+        if (todo.isEmpty()) return;
+        run(new java.util.concurrent.Callable<Boolean>() {
+            @Override public Boolean call() {
+                for (Item it : todo) {
+                    String u = "";
+                    try {
+                        org.json.JSONObject info = Xtream.vodInfo(it.id).optJSONObject("info");
+                        if (info != null) {
+                            org.json.JSONArray ba = info.optJSONArray("backdrop_path");
+                            if (ba != null && ba.length() > 0) u = ba.optString(0);
+                            if (u.isEmpty()) u = info.optString("backdrop");
+                        }
+                    } catch (Exception ignored) { }
+                    backdrops.put(it.id, u);
+                    it.backdrop = u;
+                }
+                return Boolean.TRUE;
+            }
+        }, new Net.Ok<Boolean>() {
+            @Override public void ok(Boolean r) { fillHero(Store.continueWatching()); }
+        }, null);
     }
 
     /** Hero banners: continue watching first, then the newest series and movies. Section cards while nothing is loaded. */
@@ -277,7 +313,7 @@ public class HomeActivity extends BaseActivity {
         }
         if (mMovies != null) for (int i = 0; i < mMovies.size() && i < 8; i++) {
             Item it = mMovies.get(i);
-            h.add(new CardAdapter.Card(it.name, it).sub(it.extra.isEmpty() ? "HMS IPTV" : it.extra).badge("NEW MOVIE").img(it.icon));
+            h.add(new CardAdapter.Card(it.name, it).sub(it.extra.isEmpty() ? "HMS IPTV" : it.extra).badge("NEW MOVIE").img(it.backdrop.isEmpty() ? it.icon : it.backdrop));
         }
         if (h.isEmpty()) {
             h.add(new CardAdapter.Card("Live TV", "live").sub("All channels").vec(R.drawable.ic_tv).colors(0xFF5B5CE6, 0xFF8E54E9));
