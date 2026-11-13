@@ -26,13 +26,13 @@ import java.util.List;
 
 /**
  * The launcher home (light Google-TV-like look):
- *  top bar (clock, Wi-Fi, device settings, HMS settings) -> hero banners -> apps bar -> shortcuts -> poster rows.
+ *  top bar (clock, Wi-Fi, device settings, HMS settings) -> Live / Movies / Series (centered) -> continue watching
+ *  -> new movies -> new series -> favorite apps dock (centered) -> favorite channels.
  */
 public class HomeActivity extends BaseActivity {
     private LinearLayout rows;
-    private CardAdapter hero, apps, shortcuts;
-    private static final int HERO_PER_ROW = 3;   // big cards: first 3 series + first 3 movies of the chosen folders
-    private RecyclerView appsRv, heroRv, shortcutsRv;
+    private CardAdapter apps, shortcuts;
+    private RecyclerView appsRv, shortcutsRv;
     private final java.util.Map<RecyclerView, Integer> lastPos = new java.util.HashMap<>();
     private boolean opening;
     private ImageView btnWifi, icUsb;
@@ -64,11 +64,9 @@ public class HomeActivity extends BaseActivity {
     private final List<View[]> titled = new ArrayList<>();   // {title, list} pairs that are hidden when empty
     private TextView tContT, tFavT, tMoviesT, tSeriesT;
     private RecyclerView rCont, rFav, rMovies, rSeries;
-    private boolean receiverOn, focusSet;
+    private boolean receiverOn;
     private static List<Item> mMovies, mSeries;
     private static long memoAt;
-    /** movie id -> wide backdrop url (from get_vod_info); a poster is small and looks pixelated when stretched into a wide card. */
-    private static final java.util.Map<String, String> backdrops = new java.util.HashMap<>();
 
     public static void invalidateMemo() { mMovies = null; mSeries = null; memoAt = 0; }
 
@@ -151,7 +149,7 @@ public class HomeActivity extends BaseActivity {
     // ---------------- remote control: every row is its own "tab" ----------------
     private List<RecyclerView> rowOrder() {
         List<RecyclerView> l = new ArrayList<>();
-        RecyclerView[] all = {heroRv, appsRv, shortcutsRv, rCont, rMovies, rSeries, rFav};
+        RecyclerView[] all = {shortcutsRv, rCont, rMovies, rSeries, appsRv, rFav};
         for (RecyclerView r : all) if (r != null && r.getVisibility() == View.VISIBLE && r.getAdapter() != null && r.getAdapter().getItemCount() > 0) l.add(r);
         return l;
     }
@@ -201,6 +199,17 @@ public class HomeActivity extends BaseActivity {
         return rv;
     }
 
+    /** A row that is as wide as its content and sits in the middle of the screen (no scrolling when it fits). */
+    private RecyclerView centeredList(RecyclerView.Adapter<?> ad) {
+        RecyclerView rv = new RecyclerView(this);
+        rv.setClipChildren(false);
+        rv.setClipToPadding(false);
+        rv.setPadding(Ui.dp(this, 8), Ui.dp(this, 10), Ui.dp(this, 8), Ui.dp(this, 10));
+        rv.setLayoutManager(new LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false));
+        rv.setAdapter(ad);
+        return rv;
+    }
+
     private TextView sectionTitle(String t) {
         TextView tv = Ui.label(this, t, 20, R.color.h_ink, true);
         tv.setPadding(Ui.dp(this, 56), Ui.dp(this, 10), 0, Ui.dp(this, 0));
@@ -227,37 +236,21 @@ public class HomeActivity extends BaseActivity {
         bindIcon(R.id.btnDevice, new Runnable() { @Override public void run() { Nav.deviceSettings(HomeActivity.this); } }, tint);   // Android settings
         bindIcon(R.id.btnApp, new Runnable() { @Override public void run() { Nav.section(HomeActivity.this, "settings"); } }, tint);  // HMS HOME settings
 
-        // 1) hero banners
-        hero = new CardAdapter(CardAdapter.HERO, cl);
-        heroRv = horizontalList(hero, 40);
-        rows.addView(heroRv, new LinearLayout.LayoutParams(-1, -2));
-
-        // 2) apps bar: rounded translucent container
-        apps = new CardAdapter(CardAdapter.APP, cl);
-        appsRv = horizontalList(apps, 14);
-        appsRv.setPadding(Ui.dp(this, 14), Ui.dp(this, 14), Ui.dp(this, 14), Ui.dp(this, 14));
-        LinearLayout bar = new LinearLayout(this);
-        bar.setBackgroundResource(R.drawable.bg_apps_bar);
-        bar.setClipChildren(false);
-        bar.addView(appsRv, new LinearLayout.LayoutParams(-1, -2));
-        LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(-1, -2);
-        bp.setMargins(Ui.dp(this, 48), Ui.dp(this, 6), Ui.dp(this, 48), 0);
-        rows.addView(bar, bp);
-
-        // 3) shortcuts (Live TV / Movies / Series / Search / All apps / Accounts)
+        // 1) Live / Movies / Series: three cards side by side, centered, all visible without scrolling
         shortcuts = new CardAdapter(CardAdapter.SHORTCUT, cl);
-        shortcutsRv = horizontalList(shortcuts, 40);
-        rows.addView(shortcutsRv, new LinearLayout.LayoutParams(-1, -2));
+        shortcutsRv = centeredList(shortcuts);
+        LinearLayout.LayoutParams scp = new LinearLayout.LayoutParams(-2, -2);
+        scp.gravity = android.view.Gravity.CENTER_HORIZONTAL;
+        scp.topMargin = Ui.dp(this, 8);
+        rows.addView(shortcutsRv, scp);
         List<CardAdapter.Card> sc = new ArrayList<>();
-        sc.add(new CardAdapter.Card("Live TV", "live").vec(R.drawable.ic_tv).colors(0xFF5B5CE6, 0xFF8E54E9));
+        sc.add(new CardAdapter.Card("Live", "live").vec(R.drawable.ic_tv).colors(0xFF5B5CE6, 0xFF8E54E9));
         sc.add(new CardAdapter.Card("Movies", "movie").vec(R.drawable.ic_movie).colors(0xFFE5484D, 0xFFF2994A));
         sc.add(new CardAdapter.Card("Series", "series").vec(R.drawable.ic_series).colors(0xFF0E9F8E, 0xFF38C172));
-        sc.add(new CardAdapter.Card("Search", "search").vec(R.drawable.ic_search_white).colors(0xFF2F6BFF, 0xFF4FB3FF));
-        sc.add(new CardAdapter.Card("All apps", "apps").vec(R.drawable.ic_apps).colors(0xFF3A4254, 0xFF596277));
-        sc.add(new CardAdapter.Card("IPTV accounts", "login").vec(R.drawable.ic_person).colors(0xFF8A5A44, 0xFFC08457));
         shortcuts.set(sc);
+        FocusNav.focusPos(shortcutsRv, 0);
 
-        // 4) poster rows (dark text on the light background)
+        // 2) poster rows: continue watching, new movies, new series (normal size)
         tCont = new TileAdapter(140, 210, false, true, tl);
         tMovies = new TileAdapter(140, 210, false, true, tl);
         tSeries = new TileAdapter(140, 210, false, true, tl);
@@ -267,12 +260,31 @@ public class HomeActivity extends BaseActivity {
         tMoviesT = sectionTitle("New movies"); rMovies = horizontalList(tMovies, 48);
         tSeriesT = sectionTitle("New series"); rSeries = horizontalList(tSeries, 48);
         tFavT = sectionTitle("Favorite channels"); rFav = horizontalList(tFav, 48);
-        for (View[] p : new View[][]{{tContT, rCont}, {tMoviesT, rMovies}, {tSeriesT, rSeries}, {tFavT, rFav}}) {
+        for (View[] p : new View[][]{{tContT, rCont}, {tMoviesT, rMovies}, {tSeriesT, rSeries}}) {
             rows.addView(p[0], new LinearLayout.LayoutParams(-1, -2));
             rows.addView(p[1], new LinearLayout.LayoutParams(-1, -2));
             p[0].setVisibility(View.GONE); p[1].setVisibility(View.GONE);
             titled.add(p);
         }
+
+        // 3) favorite apps dock: rounded translucent container, apps centered inside it
+        apps = new CardAdapter(CardAdapter.APP, cl);
+        appsRv = horizontalList(apps, 14);
+        appsRv.setPadding(Ui.dp(this, 14), Ui.dp(this, 14), Ui.dp(this, 14), Ui.dp(this, 14));
+        LinearLayout bar = new LinearLayout(this);
+        bar.setBackgroundResource(R.drawable.bg_apps_bar);
+        bar.setClipChildren(false);
+        bar.setGravity(android.view.Gravity.CENTER_HORIZONTAL);
+        bar.addView(appsRv, new LinearLayout.LayoutParams(-2, -2));
+        LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(-1, -2);
+        bp.setMargins(Ui.dp(this, 48), Ui.dp(this, 10), Ui.dp(this, 48), Ui.dp(this, 6));
+        rows.addView(bar, bp);
+
+        // 4) favorite channels
+        rows.addView(tFavT, new LinearLayout.LayoutParams(-1, -2));
+        rows.addView(rFav, new LinearLayout.LayoutParams(-1, -2));
+        tFavT.setVisibility(View.GONE); rFav.setVisibility(View.GONE);
+        titled.add(new View[]{tFavT, rFav});
     }
 
     @Override protected void onStart() {
@@ -332,10 +344,6 @@ public class HomeActivity extends BaseActivity {
                 }
                 f.add(new CardAdapter.Card("All apps", "apps").vec(R.drawable.ic_apps).colors(0xFF3A4254, 0xFF596277));
                 apps.set(f);
-                if (!focusSet) { focusSet = true; appsRv.post(new Runnable() { @Override public void run() {
-                    RecyclerView.ViewHolder vh = appsRv.findViewHolderForAdapterPosition(0);
-                    if (vh != null) vh.itemView.requestFocus();
-                } }); }
             }
         }, null);
 
@@ -347,18 +355,12 @@ public class HomeActivity extends BaseActivity {
         show(tFavT, rFav, !favCh.isEmpty());
 
         if (!Store.hasLogin()) {
-            List<CardAdapter.Card> h = new ArrayList<>();
-            h.add(new CardAdapter.Card("IPTV login", "login").sub("Add your Xtream account").badge("START")
-                    .vec(R.drawable.ic_person).colors(0xFF2F6BFF, 0xFF7B5CFF));
-            hero.set(h);
             tMovies.set(new ArrayList<TileAdapter.Tile>());
             tSeries.set(new ArrayList<TileAdapter.Tile>());
             show(tMoviesT, rMovies, false);
             show(tSeriesT, rSeries, false);
             return;
         }
-        fillHero();
-
         if (mMovies != null && System.currentTimeMillis() - memoAt < 600000) { fillIptv(); return; }
         run(new java.util.concurrent.Callable<List<List<Item>>>() {
             @Override public List<List<Item>> call() throws Exception {
@@ -379,58 +381,5 @@ public class HomeActivity extends BaseActivity {
         tSeries.set(itemTiles(mSeries, false));
         show(tMoviesT, rMovies, !mMovies.isEmpty());
         show(tSeriesT, rSeries, !mSeries.isEmpty());
-        fillHero();
-        loadMovieBackdrops();
-    }
-
-    /** Fetches the wide picture for the movies shown in the hero (first 8) and refreshes the hero when done. */
-    private void loadMovieBackdrops() {
-        if (mMovies == null) return;
-        final List<Item> todo = new ArrayList<>();
-        for (int i = 0; i < mMovies.size() && i < HERO_PER_ROW; i++) {
-            Item it = mMovies.get(i);
-            if (it.backdrop.isEmpty() && !backdrops.containsKey(it.id)) todo.add(it);
-            else if (it.backdrop.isEmpty()) it.backdrop = backdrops.get(it.id);
-        }
-        if (todo.isEmpty()) return;
-        run(new java.util.concurrent.Callable<Boolean>() {
-            @Override public Boolean call() {
-                for (Item it : todo) {
-                    String u = "";
-                    try {
-                        org.json.JSONObject info = Xtream.vodInfo(it.id).optJSONObject("info");
-                        if (info != null) {
-                            org.json.JSONArray ba = info.optJSONArray("backdrop_path");
-                            if (ba != null && ba.length() > 0) u = ba.optString(0);
-                            if (u.isEmpty()) u = info.optString("backdrop");
-                        }
-                    } catch (Exception ignored) { }
-                    backdrops.put(it.id, u);
-                    it.backdrop = u;
-                }
-                return Boolean.TRUE;
-            }
-        }, new Net.Ok<Boolean>() {
-            @Override public void ok(Boolean r) { fillHero(); }
-        }, null);
-    }
-
-    /** Hero banners: the first few series and movies of the chosen folders (continue watching lives in its own row). */
-    private void fillHero() {
-        List<CardAdapter.Card> h = new ArrayList<>();
-        if (mSeries != null) for (int i = 0; i < mSeries.size() && i < HERO_PER_ROW; i++) {
-            Item it = mSeries.get(i);
-            h.add(new CardAdapter.Card(it.name, it).sub("HMS IPTV").badge("NEW SERIES").img(it.backdrop.isEmpty() ? it.icon : it.backdrop));
-        }
-        if (mMovies != null) for (int i = 0; i < mMovies.size() && i < HERO_PER_ROW; i++) {
-            Item it = mMovies.get(i);
-            h.add(new CardAdapter.Card(it.name, it).sub(it.extra.isEmpty() ? "HMS IPTV" : it.extra).badge("NEW MOVIE").img(it.backdrop.isEmpty() ? it.icon : it.backdrop));
-        }
-        if (h.isEmpty()) {
-            h.add(new CardAdapter.Card("Live TV", "live").sub("All channels").vec(R.drawable.ic_tv).colors(0xFF5B5CE6, 0xFF8E54E9));
-            h.add(new CardAdapter.Card("Movies", "movie").sub("Browse the library").vec(R.drawable.ic_movie).colors(0xFFE5484D, 0xFFF2994A));
-            h.add(new CardAdapter.Card("Series", "series").sub("Browse the library").vec(R.drawable.ic_series).colors(0xFF0E9F8E, 0xFF38C172));
-        }
-        hero.set(h);
     }
 }
