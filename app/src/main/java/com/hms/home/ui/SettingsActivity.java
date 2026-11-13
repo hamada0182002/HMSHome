@@ -66,6 +66,9 @@ public class SettingsActivity extends BaseActivity {
         r.add(new TextAdapter.Row("Phone keyboard: enable", "Turn on \"HMS Phone Keyboard\" in Android's keyboard list", "kbenable"));
         r.add(new TextAdapter.Row("Phone keyboard: choose", "Pick \"HMS Phone Keyboard\" as the current keyboard", "kbpick"));
         r.add(new TextAdapter.Row("Phone keyboard server", KBMODE[Store.kbMode()] + "  (press OK to change)", "kbmode"));
+        r.add(new TextAdapter.Row("Phone mouse & remote: enable", com.hms.home.input.MouseService.connected()
+                ? "On  •  open the phone keyboard page and press the mouse button"
+                : "Off  •  press OK, then turn on \"HMS Mouse\" in Accessibility", "mouse"));
         r.add(new TextAdapter.Row("Phone keyboard: reset code", "Creates a new link - the page saved on your phone stops working", "kbreset"));
         r.add(new TextAdapter.Row("Manage favorite apps", "Open APPS (hold OK on an app)", "apps"));
         r.add(new TextAdapter.Row("Clear favorites", "Apps + channels + movies + series", "clearfav"));
@@ -93,6 +96,10 @@ public class SettingsActivity extends BaseActivity {
                 break;
             case "kbpick":
                 ((android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE)).showInputMethodPicker();
+                break;
+            case "mouse":
+                try { startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); }
+                catch (Exception e) { Nav.deviceSettings(this); }
                 break;
             case "kbmode": Store.setKbMode((Store.kbMode() + 1) % 3); build(); break;
             case "kbreset":

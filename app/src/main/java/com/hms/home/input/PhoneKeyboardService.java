@@ -26,12 +26,14 @@ public class PhoneKeyboardService extends InputMethodService implements KeyServe
 
     @Override public void onCreate() {
         super.onCreate();
-        server = new KeyServer(this);
+        server = KeyServer.shared();
+        server.setHost(this);
         if (Store.kbMode() == 1) server.start();      // "always on"
     }
 
     @Override public void onDestroy() {
-        server.stop();
+        server.clearHost(this);
+        server.stopUnlessPinned();
         super.onDestroy();
     }
 
@@ -57,13 +59,14 @@ public class PhoneKeyboardService extends InputMethodService implements KeyServe
         field = true;
         if (!restarting) epoch = System.currentTimeMillis();   // new field: the phone page clears its box
         int mode = Store.kbMode();
-        if (mode == 2) server.stop(); else server.start();
+        server.setHost(this);
+        if (mode == 2) server.stopUnlessPinned(); else server.start();
         updateInfo();
     }
 
     @Override public void onFinishInputView(boolean finishingInput) {
         field = false;
-        if (Store.kbMode() != 1) server.stop();                // only while typing: free the port and the memory
+        if (Store.kbMode() != 1) server.stopUnlessPinned();                // only while typing: free the port and the memory
         super.onFinishInputView(finishingInput);
     }
 
