@@ -45,7 +45,25 @@ public final class Net {
     /** A normal browser User-Agent: many IPTV panels reject unknown ones (HTTP 403 / empty reply). */
     public static final String UA = "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36";
 
-    public static HttpURLConnection open(String u) throws IOException { return open(u, UA, "*/*"); }
+    private static final String[] ALT_UA = {UA, "okhttp/4.12.0", "VLC/3.0.18 LibVLC/3.0.18", "Lavf/60.3.100"};
+    private static volatile String goodUa = UA;
+
+    /** The User-Agent the IPTV server accepted last (used by the player too). */
+    public static String ua() { return goodUa; }
+
+    /** If the server answers 403, tries other common player User-Agents and remembers the one that works. */
+    public static HttpURLConnection open(String u) throws IOException {
+        try { return open(u, goodUa, "*/*"); }
+        catch (IOException e) {
+            if (!"HTTP 403".equals(e.getMessage())) throw e;
+            for (String a : ALT_UA) {
+                if (a.equals(goodUa)) continue;
+                try { HttpURLConnection c = open(u, a, "*/*"); goodUa = a; return c; }
+                catch (IOException e2) { if (!"HTTP 403".equals(e2.getMessage())) throw e2; }
+            }
+            throw e;
+        }
+    }
 
     /**
      * Opens a URL and follows redirects BY HAND, including http -> https and https -> http
@@ -78,7 +96,16 @@ public final class Net {
         throw new IOException("السيرفر بيحوّل الرابط كتير (redirect loop)");
     }
 
-    public static String readAll(String u) throws IOException { return readAll(u, UA, "*/*"); }
+    public static String readAll(String u) throws IOException {
+        HttpURLConnection c = open(u);
+        try {
+            InputStream in = c.getInputStream();
+            ByteArrayOutputStream bo = new ByteArrayOutputStream();
+            byte[] buf = new byte[8192]; int n;
+            while ((n = in.read(buf)) > 0) bo.write(buf, 0, n);
+            return bo.toString("UTF-8");
+        } finally { c.disconnect(); }
+    }
 
     public static String readAll(String u, String ua, String accept) throws IOException {
         HttpURLConnection c = open(u, ua, accept);
@@ -97,6 +124,7 @@ public final class Net {
         if (e instanceof java.net.SocketTimeoutException) return "انتهت مهلة الاتصال بالسيرفر";
         if (e instanceof javax.net.ssl.SSLException) return "مشكلة في شهادة الأمان (https) - جرّب عنوان السيرفر بـ http بدل https";
         if (e instanceof java.net.UnknownHostException || e instanceof java.net.ConnectException) return "تعذر الاتصال بالسيرفر - اتأكد من الإنترنت ومن عنوان السيرفر";
+        if (m.equals("HTTP 403")) return "السيرفر رفض الدخول (HTTP 403) - غالباً الحساب أو الـIP محظور، أو الاشتراك مفتوح على أقصى عدد أجهزة، أو السيرفر بيقبل برامج معينة بس";
         if (e instanceof IOException && m.startsWith("HTTP")) return "السيرفر رجّع خطأ (" + m + ")";
         if (e instanceof org.json.JSONException) return "رد السيرفر مش مفهوم";
         return m.isEmpty() ? "حصل خطأ غير متوقع (" + e.getClass().getSimpleName() + ")" : m;

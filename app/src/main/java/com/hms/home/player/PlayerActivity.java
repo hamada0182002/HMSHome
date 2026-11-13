@@ -154,7 +154,7 @@ public class PlayerActivity extends Activity {
         if (player != null) return;
         DefaultHttpDataSource.Factory hf = new DefaultHttpDataSource.Factory()
                 .setConnectTimeoutMs(10000).setReadTimeoutMs(15000).setAllowCrossProtocolRedirects(true)
-                .setUserAgent(com.hms.home.data.Net.UA);
+                .setUserAgent(com.hms.home.data.Net.ua());
         DefaultLoadControl lc = new DefaultLoadControl.Builder()
                 .setBufferDurationsMs(15000, 30000, 2000, 4000)
                 .setTargetBufferBytes(12 * 1024 * 1024)
