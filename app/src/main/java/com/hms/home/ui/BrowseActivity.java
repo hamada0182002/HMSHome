@@ -5,6 +5,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.DisplayMetrics;
+import android.view.KeyEvent;
 import android.view.View;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -26,6 +27,7 @@ import java.util.concurrent.Callable;
 /** Live TV / Movies / Series: categories on the left, items on the right. */
 public class BrowseActivity extends BaseActivity {
     private String type;
+    private RecyclerView catsRv, gridRv;
     private TextAdapter catAd;
     private TileAdapter gridAd;
     private TextView status, epg;
@@ -50,7 +52,7 @@ public class BrowseActivity extends BaseActivity {
         sb.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { Nav.section(BrowseActivity.this, "search"); } });
         sh.addView(sb);
 
-        RecyclerView catsRv = findViewById(R.id.cats);
+        catsRv = findViewById(R.id.cats);
         catsRv.setLayoutManager(new LinearLayoutManager(this));
         catAd = new TextAdapter(false, new TextAdapter.Listener() {
             @Override public void click(TextAdapter.Row r, final int pos) { cancelPending(); select(pos); findViewById(R.id.grid).requestFocus(); }
@@ -67,6 +69,7 @@ public class BrowseActivity extends BaseActivity {
         int availDp = (int) (dm.widthPixels / dm.density) - 260 - 60;
         int span = Math.max(2, availDp / (tw + 24));
         RecyclerView grid = findViewById(R.id.grid);
+        gridRv = grid;
         grid.setLayoutManager(new GridLayoutManager(this, span));
         gridAd = new TileAdapter(tw, live ? 90 : 195, live, new TileAdapter.Listener() {
             @Override public void click(TileAdapter.Tile t, int pos) {
@@ -105,6 +108,23 @@ public class BrowseActivity extends BaseActivity {
         }, new Net.Fail() {
             @Override public void fail(Exception e) { status.setText(Net.msg(e)); }
         });
+    }
+
+    /** Folder list -> RIGHT = first item of the grid (not the nearest one); grid -> LEFT at the first column = back to the folder. */
+    @Override public boolean dispatchKeyEvent(KeyEvent e) {
+        if (e.getAction() == KeyEvent.ACTION_DOWN) {
+            int k = e.getKeyCode();
+            RecyclerView in = FocusNav.listOf(getCurrentFocus());
+            if (in == catsRv && k == KeyEvent.KEYCODE_DPAD_RIGHT) {
+                if (gridAd.size() > 0) { cancelPending(); FocusNav.focusPos(gridRv, 0); }
+                return true;
+            }
+            if (in == gridRv && k == KeyEvent.KEYCODE_DPAD_LEFT) {
+                int span = ((GridLayoutManager) gridRv.getLayoutManager()).getSpanCount();
+                if (FocusNav.posOf(gridRv, getCurrentFocus()) % span == 0) { FocusNav.focusPos(catsRv, Math.max(0, selCat)); return true; }
+            }
+        }
+        return super.dispatchKeyEvent(e);
     }
 
     private void cancelPending() { if (pendingSel != null) h.removeCallbacks(pendingSel); }

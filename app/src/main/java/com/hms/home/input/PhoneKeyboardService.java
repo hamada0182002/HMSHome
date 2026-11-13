@@ -1,7 +1,9 @@
 package com.hms.home.input;
 
 import android.inputmethodservice.InputMethodService;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
@@ -21,6 +23,15 @@ import com.hms.home.ui.Ui;
 public class PhoneKeyboardService extends InputMethodService implements KeyServer.Host {
     private KeyServer server;
     private TextView info;
+    private final Handler tick = new Handler(Looper.getMainLooper());
+    private final Runnable retry = new Runnable() {
+        @Override public void run() {
+            if (!field) return;
+            if (Store.kbMode() != 2 && !server.isRunning()) server.start();
+            updateInfo();
+            tick.postDelayed(this, 2500);          // the network may come up a bit after boot
+        }
+    };
     private volatile boolean field;
     private volatile long epoch = System.currentTimeMillis();
 
@@ -32,6 +43,7 @@ public class PhoneKeyboardService extends InputMethodService implements KeyServe
     }
 
     @Override public void onDestroy() {
+        tick.removeCallbacks(retry);
         server.clearHost(this);
         server.stopUnlessPinned();
         super.onDestroy();
@@ -62,10 +74,13 @@ public class PhoneKeyboardService extends InputMethodService implements KeyServe
         server.setHost(this);
         if (mode == 2) server.stopUnlessPinned(); else server.start();
         updateInfo();
+        tick.removeCallbacks(retry);
+        tick.postDelayed(retry, 2500);
     }
 
     @Override public void onFinishInputView(boolean finishingInput) {
         field = false;
+        tick.removeCallbacks(retry);
         if (Store.kbMode() != 1) server.stopUnlessPinned();                // only while typing: free the port and the memory
         super.onFinishInputView(finishingInput);
     }
@@ -75,15 +90,17 @@ public class PhoneKeyboardService extends InputMethodService implements KeyServe
         return super.onKeyDown(keyCode, event);
     }
 
+    /** Shows the phone link when it works; otherwise shows nothing (no error text) - only the "Switch keyboard" button stays. */
     private void updateInfo() {
         if (info == null) return;
         String u = KeyServer.url();
-        String s;
-        if (Store.kbMode() == 2) s = "HMS Phone Keyboard is OFF (HMS HOME settings). Press MENU to switch keyboard.";
-        else if (u == null) s = "No Wi-Fi / Ethernet network - connect the box to your network.   MENU = switch keyboard";
-        else if (!server.isRunning()) s = "Port " + KeyServer.PORT + " is busy - restart the box.   MENU = switch keyboard";
-        else s = "Type from your phone:  " + u + "\nMENU = switch keyboard";
-        info.setText(s);
+        if (Store.kbMode() == 2 || u == null || !server.isRunning()) {
+            info.setText("");
+            info.setVisibility(View.GONE);
+            return;
+        }
+        info.setText("Type from your phone:  " + u + "\nMENU = switch keyboard");
+        info.setVisibility(View.VISIBLE);
     }
 
     /** Goes to the next keyboard (the box's normal one); shows the picker when there is none. */

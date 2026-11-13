@@ -44,6 +44,15 @@ public final class Nav {
         } else play(a, it);
     }
 
+    /** "Continue watching": an episode reopens its series page (to pick the next / previous episode); the rest resumes directly. */
+    public static void resume(Activity a, Item it) {
+        if (it.type.equals("episode") && !it.sid.isEmpty()) {
+            Item s = new Item();
+            s.type = "series"; s.id = it.sid; s.name = it.sname.isEmpty() ? it.name : it.sname; s.icon = it.sicon;
+            a.startActivity(new Intent(a, DetailActivity.class).putExtra("item", s.toJson().toString()).putExtra("focusEp", it.id));
+        } else play(a, it);
+    }
+
     public static void play(Activity a, Item it) {
         PlayQueue.set(Collections.singletonList(it), 0);
         a.startActivity(new Intent(a, PlayerActivity.class));

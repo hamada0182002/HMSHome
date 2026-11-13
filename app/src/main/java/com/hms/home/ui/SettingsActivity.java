@@ -26,6 +26,11 @@ import java.util.concurrent.Callable;
 
 public class SettingsActivity extends BaseActivity {
     private TextAdapter ad;
+    private RecyclerView rv;
+    private TextView titleTv;
+    /** null = main list of groups, otherwise the open group. */
+    private String page;
+    private int focusRow;
     private static final String[] ASPECT = {"Fit", "Stretch", "Zoom"};
     private static final String[] FONT = {"Normal", "Large", "Extra large"};
     private static final String[] KBMODE = {"Only while typing (saves RAM)", "Always on", "Off"};
@@ -36,12 +41,12 @@ public class SettingsActivity extends BaseActivity {
         android.widget.LinearLayout root = new android.widget.LinearLayout(this);
         root.setOrientation(android.widget.LinearLayout.VERTICAL);
         root.setPadding(Ui.dp(this, 48), Ui.dp(this, 30), Ui.dp(this, 48), Ui.dp(this, 20));
-        TextView title = Ui.label(this, "Settings", 30, R.color.h_ink, true);
-        root.addView(title);
-        RecyclerView rv = new RecyclerView(this);
+        titleTv = Ui.label(this, "Settings", 30, R.color.h_ink, true);
+        root.addView(titleTv);
+        rv = new RecyclerView(this);
         rv.setLayoutManager(new LinearLayoutManager(this));
         ad = new TextAdapter(false, true, new TextAdapter.Listener() {
-            @Override public void click(TextAdapter.Row r, int pos) { act((String) r.data); }
+            @Override public void click(TextAdapter.Row r, int pos) { focusRow = pos; act((String) r.data); }
             @Override public void focus(TextAdapter.Row r, int pos) { }
         });
         rv.setAdapter(ad);
@@ -51,35 +56,81 @@ public class SettingsActivity extends BaseActivity {
 
     @Override protected void onResume() { super.onResume(); build(); }
 
+    private static final String[][] GROUPS = {
+            {"g_iptv", "IPTV", "Accounts, reload data, what shows on the home"},
+            {"g_kb", "Phone keyboard & mouse", "Type and control the box from your phone"},
+            {"g_player", "Player & display", "Font size, aspect ratio, subtitles"},
+            {"g_apps", "Apps & favorites", "Favorite apps and clearing favorites"},
+            {"g_sys", "Device & system", "Android settings, default home, clear cache"},
+            {"g_about", "Updates & about", "Check for updates, version info"},
+    };
+
+    private static String groupTitle(String id) {
+        for (String[] g : GROUPS) if (g[0].equals(id)) return g[1];
+        return "";
+    }
+
     private void build() {
         List<TextAdapter.Row> r = new ArrayList<>();
-        r.add(new TextAdapter.Row("Check for updates", "Current version " + BuildConfig.VERSION_NAME + "  -  downloads and installs the newest version online", "update"));
-        r.add(new TextAdapter.Row("IPTV accounts", Store.hasLogin() ? Store.active().name + "  |  " + Store.user() + " @ " + Store.server().replace("http://", "").replace("https://", "") + "   (" + Store.accounts().size() + ")" : "No account yet - add one", "account"));
-        r.add(new TextAdapter.Row("Reload IPTV data", "Re-downloads channel / movie / series index next time", "reload"));
-        String[] hm = Store.homeCat("movie"), hs = Store.homeCat("series");
-        r.add(new TextAdapter.Row("Home: new movies from", hm == null ? "Latest added (automatic)" : "Folder: " + hm[1], "homemovie"));
-        r.add(new TextAdapter.Row("Home: new series from", hs == null ? "Latest added (automatic)" : "Folder: " + hs[1], "homeseries"));
-        r.add(new TextAdapter.Row("Font size", FONT[Store.fontLevel()] + "  (press OK to change)", "font"));
-        r.add(new TextAdapter.Row("Default aspect ratio", ASPECT[Store.aspect()], "aspect"));
-        r.add(new TextAdapter.Row("Default subtitles", Store.subsDefault() ? "On" : "Off", "subs"));
-        r.add(new TextAdapter.Row("Phone keyboard  -  QR code", "Type on your phone instead of the remote  •  " + KbHelper.state(this), "kbqr"));
-        r.add(new TextAdapter.Row("Phone keyboard: enable", "Turn on \"HMS Phone Keyboard\" in Android's keyboard list", "kbenable"));
-        r.add(new TextAdapter.Row("Phone keyboard: choose", "Pick \"HMS Phone Keyboard\" as the current keyboard", "kbpick"));
-        r.add(new TextAdapter.Row("Phone keyboard server", KBMODE[Store.kbMode()] + "  (press OK to change)", "kbmode"));
-        r.add(new TextAdapter.Row("Phone mouse & remote: enable", com.hms.home.input.MouseService.connected()
-                ? "On  •  open the phone keyboard page and press the mouse button"
-                : "Off  •  press OK, then turn on \"HMS Mouse\" in Accessibility", "mouse"));
-        r.add(new TextAdapter.Row("Phone keyboard: reset code", "Creates a new link - the page saved on your phone stops working", "kbreset"));
-        r.add(new TextAdapter.Row("Manage favorite apps", "Open APPS (hold OK on an app)", "apps"));
-        r.add(new TextAdapter.Row("Clear favorites", "Apps + channels + movies + series", "clearfav"));
-        r.add(new TextAdapter.Row("Clear cache", "Images + IPTV index", "cache"));
-        r.add(new TextAdapter.Row("Device settings", "Android settings: Wi-Fi, display, sound, apps...", "device"));
-        r.add(new TextAdapter.Row("Set HMS HOME as default home", "Pick \"HMS HOME\" then \"Always\"", "home"));
-        r.add(new TextAdapter.Row("About", "HMS HOME " + BuildConfig.VERSION_NAME + "  •  com.hms.home  •  Android " + Build.VERSION.RELEASE + "  •  " + Build.CPU_ABI, "about"));
+        if (page == null) {
+            titleTv.setText("Settings");
+            for (String[] g : GROUPS) r.add(new TextAdapter.Row(g[1], g[2], g[0]));
+        } else {
+            titleTv.setText("Settings  \u203A  " + groupTitle(page));
+            switch (page) {
+                case "g_iptv":
+                    r.add(new TextAdapter.Row("IPTV accounts", Store.hasLogin() ? Store.active().name + "  |  " + Store.user() + " @ " + Store.server().replace("http://", "").replace("https://", "") + "   (" + Store.accounts().size() + ")" : "No account yet - add one", "account"));
+                    String[] hm = Store.homeCat("movie"), hs = Store.homeCat("series");
+                    r.add(new TextAdapter.Row("Home: new movies from", hm == null ? "Latest added (automatic)" : "Folder: " + hm[1], "homemovie"));
+                    r.add(new TextAdapter.Row("Home: new series from", hs == null ? "Latest added (automatic)" : "Folder: " + hs[1], "homeseries"));
+                    r.add(new TextAdapter.Row("Reload IPTV data", "Re-downloads channel / movie / series index next time", "reload"));
+                    break;
+                case "g_kb":
+                    r.add(new TextAdapter.Row("QR code", "Type on your phone instead of the remote  \u2022  " + KbHelper.state(this), "kbqr"));
+                    r.add(new TextAdapter.Row("Enable keyboard", "Turn on \"HMS Phone Keyboard\" in Android's keyboard list", "kbenable"));
+                    r.add(new TextAdapter.Row("Choose keyboard", "Pick \"HMS Phone Keyboard\" as the current keyboard", "kbpick"));
+                    r.add(new TextAdapter.Row("Keyboard server", KBMODE[Store.kbMode()] + "  (press OK to change)", "kbmode"));
+                    r.add(new TextAdapter.Row("Mouse & remote", com.hms.home.input.MouseService.connected()
+                            ? "On  \u2022  open the phone keyboard page and press the mouse button"
+                            : "Off  \u2022  press OK, then turn on \"HMS Mouse\" in Accessibility", "mouse"));
+                    r.add(new TextAdapter.Row("Reset code", "Creates a new link - the page saved on your phone stops working", "kbreset"));
+                    break;
+                case "g_player":
+                    r.add(new TextAdapter.Row("Font size", FONT[Store.fontLevel()] + "  (press OK to change)", "font"));
+                    r.add(new TextAdapter.Row("Default aspect ratio", ASPECT[Store.aspect()], "aspect"));
+                    r.add(new TextAdapter.Row("Default subtitles", Store.subsDefault() ? "On" : "Off", "subs"));
+                    break;
+                case "g_apps":
+                    r.add(new TextAdapter.Row("Manage favorite apps", "Open APPS (hold OK on an app)", "apps"));
+                    r.add(new TextAdapter.Row("Clear favorites", "Apps + channels + movies + series", "clearfav"));
+                    break;
+                case "g_sys":
+                    r.add(new TextAdapter.Row("Device settings", "Android settings: Wi-Fi, display, sound, apps...", "device"));
+                    r.add(new TextAdapter.Row("Set HMS HOME as default home", "Pick \"HMS HOME\" then \"Always\"", "home"));
+                    r.add(new TextAdapter.Row("Clear cache", "Images + IPTV index", "cache"));
+                    break;
+                case "g_about":
+                    r.add(new TextAdapter.Row("Check for updates", "Current version " + BuildConfig.VERSION_NAME + "  -  downloads and installs the newest version online", "update"));
+                    r.add(new TextAdapter.Row("About", "HMS HOME " + BuildConfig.VERSION_NAME + "  \u2022  com.hms.home  \u2022  Android " + Build.VERSION.RELEASE + "  \u2022  " + Build.CPU_ABI, "about"));
+                    break;
+                default: break;
+            }
+        }
         ad.set(r);
+        FocusNav.focusPos(rv, focusRow);
+    }
+
+    /** BACK inside a group returns to the main list of groups (and not out of settings). */
+    @Override public void onBackPressed() {
+        if (page != null) {
+            int idx = 0;
+            for (int i = 0; i < GROUPS.length; i++) if (GROUPS[i][0].equals(page)) idx = i;
+            page = null; focusRow = idx; build();
+        } else super.onBackPressed();
     }
 
     private void act(String id) {
+        if (id.startsWith("g_")) { page = id; focusRow = 0; build(); return; }
         switch (id) {
             case "account": startActivity(new Intent(this, LoginActivity.class)); break;
             case "reload": Xtream.clearCache(); HomeActivity.invalidateMemo(); toast("هيتم تحميل بيانات IPTV من جديد"); break;

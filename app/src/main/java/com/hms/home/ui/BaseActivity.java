@@ -3,6 +3,7 @@ package com.hms.home.ui;
 import android.app.Activity;
 import android.content.Context;
 import android.content.res.Configuration;
+import android.view.KeyEvent;
 import android.widget.Toast;
 import com.hms.home.data.Net;
 import com.hms.home.data.Store;
@@ -31,6 +32,16 @@ public abstract class BaseActivity extends Activity {
     @Override public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
         if (hasFocus) Ui.immersive(getWindow());
+    }
+
+    /** Remote control: the cursor stops at the end of a list instead of jumping to another part of the screen. */
+    @Override public boolean dispatchKeyEvent(KeyEvent e) {
+        if (e.getAction() == KeyEvent.ACTION_DOWN) {
+            int k = e.getKeyCode();
+            if ((k == KeyEvent.KEYCODE_DPAD_LEFT || k == KeyEvent.KEYCODE_DPAD_RIGHT || k == KeyEvent.KEYCODE_DPAD_DOWN)
+                    && FocusNav.atEdge(getCurrentFocus(), k)) return true;
+        }
+        return super.dispatchKeyEvent(e);
     }
 
     protected <T> Net.Task run(Callable<T> c, Net.Ok<T> ok, Net.Fail fail) {

@@ -173,6 +173,14 @@ public final class Store {
             p.edit().putString("prog", all.toString()).apply();
         } catch (Exception ignored) { }
     }
+    /** Removes one entry from "Continue watching". */
+    public static void removeProgress(Item it) {
+        try {
+            JSONObject all = new JSONObject(p.getString("prog", "{}"));
+            all.remove(it.key());
+            p.edit().putString("prog", all.toString()).apply();
+        } catch (Exception ignored) { }
+    }
     public static long getPosition(Item it) {
         try { return new JSONObject(p.getString("prog", "{}")).getJSONObject(it.key()).optLong("p"); }
         catch (Exception e) { return 0; }

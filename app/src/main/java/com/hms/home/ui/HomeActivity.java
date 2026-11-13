@@ -5,6 +5,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.graphics.Color;
 import android.os.Bundle;
+import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
@@ -31,7 +32,9 @@ public class HomeActivity extends BaseActivity {
     private LinearLayout rows;
     private CardAdapter hero, apps, shortcuts;
     private static final int HERO_PER_ROW = 3;   // big cards: first 3 series + first 3 movies of the chosen folders
-    private RecyclerView appsRv;
+    private RecyclerView appsRv, heroRv, shortcutsRv;
+    private final java.util.Map<RecyclerView, Integer> lastPos = new java.util.HashMap<>();
+    private boolean opening;
     private TileAdapter tCont, tFav, tMovies, tSeries;
     private final List<View[]> titled = new ArrayList<>();   // {title, list} pairs that are hidden when empty
     private TextView tContT, tFavT, tMoviesT, tSeriesT;
@@ -56,7 +59,7 @@ public class HomeActivity extends BaseActivity {
                 if (!AppsManager.launch(HomeActivity.this, (AppsManager.App) d)) toast("تعذر فتح التطبيق");
             } else if (d instanceof Item) {
                 Item it = (Item) d;
-                if (k.sub != null && k.sub.startsWith("Resume")) Nav.play(HomeActivity.this, it); else Nav.open(HomeActivity.this, it);
+                if (k.sub != null && k.sub.startsWith("Resume")) Nav.resume(HomeActivity.this, it); else Nav.open(HomeActivity.this, it);
             } else if (d instanceof String) Nav.section(HomeActivity.this, (String) d);
         }
         @Override public void menu(CardAdapter.Card k) {
@@ -71,18 +74,96 @@ public class HomeActivity extends BaseActivity {
                 if (!AppsManager.launch(HomeActivity.this, (AppsManager.App) d)) toast("تعذر فتح التطبيق");
             } else if (d instanceof Item) {
                 Item it = (Item) d;
-                if (t.sub != null && t.sub.startsWith("Resume")) Nav.play(HomeActivity.this, it); else Nav.open(HomeActivity.this, it);
+                if (t.sub != null && t.sub.startsWith("Resume")) Nav.resume(HomeActivity.this, it);
+                else if (it.type.equals("live")) playChannelInFolder(it);
+                else Nav.open(HomeActivity.this, it);
             }
         }
         @Override public void menu(TileAdapter.Tile t, int pos) {
-            if (t.data instanceof Item) {
-                boolean f = Store.toggleFav((Item) t.data);
+            if (!(t.data instanceof Item)) return;
+            Item it = (Item) t.data;
+            RecyclerView from = FocusNav.listOf(getCurrentFocus());
+            if (t.sub != null && t.sub.startsWith("Resume")) {
+                Store.removeProgress(it);                       // long press in "Continue watching" = remove it from the list
+                Toast.makeText(HomeActivity.this, "Removed from continue watching", Toast.LENGTH_SHORT).show();
+            } else {
+                boolean f = Store.toggleFav(it);
                 Toast.makeText(HomeActivity.this, f ? "Added to favorites" : "Removed from favorites", Toast.LENGTH_SHORT).show();
-                refresh();
             }
+            refresh();
+            restoreFocus(from, pos);
         }
         @Override public void focus(TileAdapter.Tile t, int pos) { }
     };
+
+    /** After a row changed (item removed), put the cursor back on the same spot instead of losing it. */
+    private void restoreFocus(RecyclerView rv, int pos) {
+        if (rv != null && rv.getAdapter() != null && rv.getAdapter().getItemCount() > 0 && rv.getVisibility() == View.VISIBLE) FocusNav.focusPos(rv, pos);
+        else FocusNav.focusPos(shortcutsRv, 0);
+    }
+
+    /** Favorite channel: play it inside its own folder so channel up / down walks that folder. */
+    private void playChannelInFolder(final Item ch) {
+        if (ch.cat == null || ch.cat.isEmpty() || opening) { Nav.play(this, ch); return; }
+        opening = true;
+        Toast.makeText(this, "…", Toast.LENGTH_SHORT).show();
+        run(new java.util.concurrent.Callable<List<Item>>() {
+            @Override public List<Item> call() throws Exception { return Xtream.items("live", ch.cat); }
+        }, new Net.Ok<List<Item>>() {
+            @Override public void ok(List<Item> l) {
+                opening = false;
+                int idx = -1;
+                for (int i = 0; i < l.size(); i++) if (l.get(i).id.equals(ch.id)) { idx = i; break; }
+                if (idx < 0) { Nav.play(HomeActivity.this, ch); return; }
+                com.hms.home.data.PlayQueue.set(l, idx);
+                startActivity(new Intent(HomeActivity.this, com.hms.home.player.PlayerActivity.class));
+            }
+        }, new Net.Fail() {
+            @Override public void fail(Exception e) { opening = false; Nav.play(HomeActivity.this, ch); }
+        });
+    }
+
+    // ---------------- remote control: every row is its own "tab" ----------------
+    private List<RecyclerView> rowOrder() {
+        List<RecyclerView> l = new ArrayList<>();
+        RecyclerView[] all = {heroRv, appsRv, shortcutsRv, rCont, rMovies, rSeries, rFav};
+        for (RecyclerView r : all) if (r != null && r.getVisibility() == View.VISIBLE && r.getAdapter() != null && r.getAdapter().getItemCount() > 0) l.add(r);
+        return l;
+    }
+
+    @Override public boolean dispatchKeyEvent(KeyEvent e) {
+        if (e.getAction() == KeyEvent.ACTION_DOWN) {
+            int k = e.getKeyCode();
+            if (k == KeyEvent.KEYCODE_DPAD_UP || k == KeyEvent.KEYCODE_DPAD_DOWN) {
+                if (moveRow(getCurrentFocus(), k == KeyEvent.KEYCODE_DPAD_DOWN)) return true;
+            }
+        }
+        return super.dispatchKeyEvent(e);
+    }
+
+    /** UP / DOWN leaves the current row and lands on the next / previous one (on the item last used there). */
+    private boolean moveRow(View focus, boolean down) {
+        if (focus == null) return false;
+        List<RecyclerView> order = rowOrder();
+        RecyclerView cur = FocusNav.listOf(focus);
+        int idx = cur == null ? -1 : order.indexOf(cur);
+        if (idx < 0) {
+            // top bar icons: DOWN goes to the first row, UP stays
+            if (down && !order.isEmpty() && cur == null) { goRow(order.get(0)); return true; }
+            return false;
+        }
+        lastPos.put(cur, Math.max(0, FocusNav.posOf(cur, focus)));
+        int to = down ? idx + 1 : idx - 1;
+        if (to >= order.size()) return true;                       // last row: stop
+        if (to < 0) { findViewById(R.id.btnApp).requestFocus(); return true; }   // first row: go to the top bar
+        goRow(order.get(to));
+        return true;
+    }
+
+    private void goRow(RecyclerView r) {
+        Integer p = lastPos.get(r);
+        FocusNav.focusPos(r, p == null ? 0 : p);
+    }
 
     // ---------------- building the screen ----------------
     private RecyclerView horizontalList(RecyclerView.Adapter<?> ad, int padLeftDp) {
@@ -120,7 +201,8 @@ public class HomeActivity extends BaseActivity {
 
         // 1) hero banners
         hero = new CardAdapter(CardAdapter.HERO, cl);
-        rows.addView(horizontalList(hero, 40), new LinearLayout.LayoutParams(-1, -2));
+        heroRv = horizontalList(hero, 40);
+        rows.addView(heroRv, new LinearLayout.LayoutParams(-1, -2));
 
         // 2) apps bar: rounded translucent container
         apps = new CardAdapter(CardAdapter.APP, cl);
@@ -136,7 +218,8 @@ public class HomeActivity extends BaseActivity {
 
         // 3) shortcuts (Live TV / Movies / Series / Search / All apps / Accounts)
         shortcuts = new CardAdapter(CardAdapter.SHORTCUT, cl);
-        rows.addView(horizontalList(shortcuts, 40), new LinearLayout.LayoutParams(-1, -2));
+        shortcutsRv = horizontalList(shortcuts, 40);
+        rows.addView(shortcutsRv, new LinearLayout.LayoutParams(-1, -2));
         List<CardAdapter.Card> sc = new ArrayList<>();
         sc.add(new CardAdapter.Card("Live TV", "live").vec(R.drawable.ic_tv).colors(0xFF5B5CE6, 0xFF8E54E9));
         sc.add(new CardAdapter.Card("Movies", "movie").vec(R.drawable.ic_movie).colors(0xFFE5484D, 0xFFF2994A));

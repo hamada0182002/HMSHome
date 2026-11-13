@@ -124,8 +124,8 @@ public class MouseService extends AccessibilityService {
                         | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
                 PixelFormat.TRANSLUCENT);
         lp.gravity = Gravity.TOP | Gravity.LEFT;
-        lp.x = (int) cx;
-        lp.y = (int) cy;
+        lp.x = (int) cx - cursor.pad;
+        lp.y = (int) cy - cursor.pad;
         try { wm.addView(cursor, lp); shown = true; } catch (Throwable ignored) { shown = false; }
     }
 
@@ -140,8 +140,8 @@ public class MouseService extends AccessibilityService {
         if (!shown) return;
         cx = Math.max(0, Math.min(sw - 1, cx + dx));
         cy = Math.max(0, Math.min(sh - 1, cy + dy));
-        lp.x = (int) cx;
-        lp.y = (int) cy;
+        lp.x = (int) cx - cursor.pad;
+        lp.y = (int) cy - cursor.pad;
         try { wm.updateViewLayout(cursor, lp); } catch (Throwable ignored) { }
     }
 
@@ -216,35 +216,41 @@ public class MouseService extends AccessibilityService {
     }
 
     // ---------------- the arrow ----------------
+    /** Small black arrow with a thin white edge. The tip of the arrow is the click point. */
     private static final class CursorView extends View {
         private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Paint line = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Path arrow = new Path();
+        final int pad;
         private final int w, h;
 
         CursorView(Context c) {
             super(c);
-            float s = 1.4f * c.getResources().getDisplayMetrics().density;
+            float s = 0.7f * c.getResources().getDisplayMetrics().density;
+            float edge = Math.max(1.2f, 1.1f * s);
+            pad = (int) Math.ceil(edge) + 1;
             fill.setStyle(Paint.Style.FILL);
-            fill.setColor(0xFFF2E6D0);
+            fill.setColor(0xFF000000);
             line.setStyle(Paint.Style.STROKE);
-            line.setColor(0xFF111111);
-            line.setStrokeWidth(Math.max(1.5f, 1.6f * s));
-            arrow.moveTo(1 * s, 1 * s);
-            arrow.lineTo(1 * s, 26 * s);
-            arrow.lineTo(7 * s, 20 * s);
-            arrow.lineTo(12 * s, 31 * s);
-            arrow.lineTo(16 * s, 29 * s);
-            arrow.lineTo(11 * s, 18 * s);
-            arrow.lineTo(19 * s, 18 * s);
+            line.setColor(0xFFFFFFFF);
+            line.setStrokeWidth(edge);
+            line.setStrokeJoin(Paint.Join.ROUND);
+            arrow.moveTo(0, 0);
+            arrow.lineTo(0, 26 * s);
+            arrow.lineTo(6 * s, 20 * s);
+            arrow.lineTo(11 * s, 31 * s);
+            arrow.lineTo(15 * s, 29 * s);
+            arrow.lineTo(10 * s, 18 * s);
+            arrow.lineTo(18 * s, 18 * s);
             arrow.close();
-            w = (int) (22 * s);
-            h = (int) (34 * s);
+            w = (int) (19 * s) + 2 * pad;
+            h = (int) (32 * s) + 2 * pad;
         }
 
         @Override protected void onMeasure(int wSpec, int hSpec) { setMeasuredDimension(w, h); }
 
         @Override protected void onDraw(Canvas canvas) {
+            canvas.translate(pad, pad);
             canvas.drawPath(arrow, fill);
             canvas.drawPath(arrow, line);
         }

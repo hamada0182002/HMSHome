@@ -154,6 +154,7 @@ public class DetailActivity extends BaseActivity {
                     if (e == null) continue;
                     Item ep = new Item();
                     ep.type = "episode"; ep.id = e.optString("id");
+                    ep.sid = item.id; ep.sname = item.name; ep.sicon = item.icon;
                     ep.ext = e.optString("container_extension", "mp4");
                     String num = e.optString("episode_num");
                     String t = e.optString("title", "");
@@ -171,9 +172,21 @@ public class DetailActivity extends BaseActivity {
         for (String k : seasonKeys) sr.add(new TextAdapter.Row("Season " + k, null, k));
         seasonAd.set(sr);
         curSeason = 0;
-        seasonAd.setSelected(0);
+        String focusEp = getIntent().getStringExtra("focusEp");
+        int focusIdx = -1;
+        if (focusEp != null) {
+            for (int s = 0; s < seasonKeys.size() && focusIdx < 0; s++) {
+                List<Item> l = seasons.get(seasonKeys.get(s));
+                for (int i = 0; i < l.size(); i++) if (l.get(i).id.equals(focusEp)) { curSeason = s; focusIdx = i; break; }
+            }
+        }
+        seasonAd.setSelected(curSeason);
         showEpisodes();
         refreshProgress();
+        if (focusIdx >= 0) {
+            getIntent().removeExtra("focusEp");
+            FocusNav.focusPos((RecyclerView) findViewById(R.id.episodes), focusIdx);   // open on the episode being watched: next / previous are one key away
+        }
     }
 
     private void showEpisodes() {
