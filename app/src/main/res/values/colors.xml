@@ -1,17 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="charcoal">#17131D</color>
-    <color name="beige">#CFC9DC</color>
+    <color name="charcoal">#121212</color>
+    <color name="beige">#D2D2D2</color>
     <color name="bronze">#AECBFA</color>
-    <color name="surface">#2B2535</color>
-    <color name="surface_hi">#3C344A</color>
-    <color name="secondary">#B6AFC6</color>
-    <color name="white">#F7F5FB</color>
-    <color name="scrim">#CC17131D</color>
-    <color name="ink">#1B1822</color>
+    <color name="surface">#242424</color>
+    <color name="surface_hi">#363636</color>
+    <color name="secondary">#ABABAB</color>
+    <color name="white">#F7F7F7</color>
+    <color name="scrim">#CC121212</color>
+    <color name="ink">#1A1A1A</color>
     <color name="pill">#40FFFFFF</color>
     <color name="pill_sel">#59FFFFFF</color>
-    <color name="icon_bg">#E6E2F0</color>
+    <color name="icon_bg">#E6E6E6</color>
     <color name="avatar">#4C7DF0</color>
     <!-- new light launcher look -->
     <color name="home_top">#EEF2F7</color>

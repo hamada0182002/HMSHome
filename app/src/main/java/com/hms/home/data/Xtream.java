@@ -223,17 +223,55 @@ public final class Xtream {
         return out;
     }
 
-    /** Items for the home "new" rows: the folder chosen in Settings (server order / newest first), else the latest added. */
+    /** Items for the home "new" rows: the folder chosen in Settings (server order / newest first), else the latest added.
+     *  Same title offered twice (HD + SD ...) is shown once here; the server folders themselves are not touched. */
     public static List<Item> homeItems(String type, int n) throws Exception {
         String[] cat = Store.homeCat(type);
-        if (cat == null) { ensureAll(type, false); return latest(type, n); }
-        List<Item> l = items(type, cat[0]);
-        boolean dated = false;
-        for (Item it : l) if (it.added > 0) { dated = true; break; }
-        if (dated) Collections.sort(l, new Comparator<Item>() {   // stable: equal dates keep the server order
-            @Override public int compare(Item a, Item b) { return Long.compare(b.added, a.added); }
-        });
+        List<Item> l;
+        if (cat == null) { ensureAll(type, false); l = latest(type, n * 3); }
+        else {
+            l = items(type, cat[0]);
+            boolean dated = false;
+            for (Item it : l) if (it.added > 0) { dated = true; break; }
+            if (dated) Collections.sort(l, new Comparator<Item>() {   // stable: equal dates keep the server order
+                @Override public int compare(Item a, Item b) { return Long.compare(b.added, a.added); }
+            });
+        }
+        l = dedupeQuality(l);
         return l.size() > n ? new ArrayList<>(l.subList(0, n)) : l;
+    }
+
+    private static final java.util.regex.Pattern QUALITY = java.util.regex.Pattern.compile(
+            "(?i)(?<![\\p{L}\\p{N}])(uhd|fhd|hdtv|hdrip|webrip|web-dl|bluray|brrip|dvdrip|hd|sd|4k|2160p|1080p|720p|576p|480p|360p)(?![\\p{L}\\p{N}])");
+    private static final java.util.regex.Pattern JUNK = java.util.regex.Pattern.compile("[^\\p{L}\\p{N}]+");
+
+    /** Title without quality tags / punctuation, lower case: "Show [HD]" and "Show (SD)" give the same key. */
+    private static String baseName(String name) {
+        String k = JUNK.matcher(QUALITY.matcher(name).replaceAll(" ")).replaceAll(" ").trim().toLowerCase();
+        return k.isEmpty() ? name.trim().toLowerCase() : k;
+    }
+
+    /** Higher = better picture: 4K > FHD/1080 > HD/720 > unmarked > SD/480. */
+    private static int qualityRank(String name) {
+        String n = name.toLowerCase();
+        if (n.contains("4k") || n.contains("uhd") || n.contains("2160")) return 5;
+        if (n.contains("fhd") || n.contains("1080")) return 4;
+        if (QUALITY.matcher(n).find() && java.util.regex.Pattern.compile("(?<![\\p{L}\\p{N}])(hd|hdtv|720p)(?![\\p{L}\\p{N}])").matcher(n).find()) return 3;
+        if (java.util.regex.Pattern.compile("(?<![\\p{L}\\p{N}])(sd|480p|360p|576p)(?![\\p{L}\\p{N}])").matcher(n).find()) return 1;
+        return 2;
+    }
+
+    /** Keeps one entry per title (the best quality one) at the position of its first appearance. */
+    public static List<Item> dedupeQuality(List<Item> in) {
+        java.util.Map<String, Integer> pos = new java.util.HashMap<>();
+        List<Item> out = new ArrayList<>();
+        for (Item it : in) {
+            String k = baseName(it.name);
+            Integer at = pos.get(k);
+            if (at == null) { pos.put(k, out.size()); out.add(it); }
+            else if (qualityRank(it.name) > qualityRank(out.get(at).name)) out.set(at, it);
+        }
+        return out;
     }
 
     public static void clearCache() {

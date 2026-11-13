@@ -29,12 +29,13 @@ import java.util.List;
  */
 public class HomeActivity extends BaseActivity {
     private LinearLayout rows;
-    private CardAdapter hero, apps, shortcuts, recent;
+    private CardAdapter hero, apps, shortcuts;
+    private static final int HERO_PER_ROW = 3;   // big cards: first 3 series + first 3 movies of the chosen folders
     private RecyclerView appsRv;
     private TileAdapter tCont, tFav, tMovies, tSeries;
     private final List<View[]> titled = new ArrayList<>();   // {title, list} pairs that are hidden when empty
-    private TextView tContT, tFavT, tMoviesT, tSeriesT, tRecentT;
-    private RecyclerView rCont, rFav, rMovies, rSeries, rRecent;
+    private TextView tContT, tFavT, tMoviesT, tSeriesT;
+    private RecyclerView rCont, rFav, rMovies, rSeries;
     private boolean receiverOn, focusSet;
     private static List<Item> mMovies, mSeries;
     private static long memoAt;
@@ -150,14 +151,12 @@ public class HomeActivity extends BaseActivity {
         tMovies = new TileAdapter(140, 210, false, true, tl);
         tSeries = new TileAdapter(140, 210, false, true, tl);
         tFav = new TileAdapter(190, 110, true, true, tl);
-        recent = new CardAdapter(CardAdapter.APP, cl);
 
         tContT = sectionTitle("Continue watching"); rCont = horizontalList(tCont, 48);
         tMoviesT = sectionTitle("New movies"); rMovies = horizontalList(tMovies, 48);
         tSeriesT = sectionTitle("New series"); rSeries = horizontalList(tSeries, 48);
         tFavT = sectionTitle("Favorite channels"); rFav = horizontalList(tFav, 48);
-        tRecentT = sectionTitle("Recent apps"); rRecent = horizontalList(recent, 48);
-        for (View[] p : new View[][]{{tContT, rCont}, {tMoviesT, rMovies}, {tSeriesT, rSeries}, {tFavT, rFav}, {tRecentT, rRecent}}) {
+        for (View[] p : new View[][]{{tContT, rCont}, {tMoviesT, rMovies}, {tSeriesT, rSeries}, {tFavT, rFav}}) {
             rows.addView(p[0], new LinearLayout.LayoutParams(-1, -2));
             rows.addView(p[1], new LinearLayout.LayoutParams(-1, -2));
             p[0].setVisibility(View.GONE); p[1].setVisibility(View.GONE);
@@ -216,11 +215,6 @@ public class HomeActivity extends BaseActivity {
                     RecyclerView.ViewHolder vh = appsRv.findViewHolderForAdapterPosition(0);
                     if (vh != null) vh.itemView.requestFocus();
                 } }); }
-
-                List<CardAdapter.Card> r = new ArrayList<>();
-                for (String p : Store.recentApps()) { AppsManager.App a = AppsManager.find(all, p); if (a != null) r.add(appCard(a)); }
-                recent.set(r);
-                show(tRecentT, rRecent, !r.isEmpty());
             }
         }, null);
 
@@ -242,7 +236,7 @@ public class HomeActivity extends BaseActivity {
             show(tSeriesT, rSeries, false);
             return;
         }
-        fillHero(cont);
+        fillHero();
 
         if (mMovies != null && System.currentTimeMillis() - memoAt < 600000) { fillIptv(); return; }
         run(new java.util.concurrent.Callable<List<List<Item>>>() {
@@ -264,7 +258,7 @@ public class HomeActivity extends BaseActivity {
         tSeries.set(itemTiles(mSeries, false));
         show(tMoviesT, rMovies, !mMovies.isEmpty());
         show(tSeriesT, rSeries, !mSeries.isEmpty());
-        fillHero(Store.continueWatching());
+        fillHero();
         loadMovieBackdrops();
     }
 
@@ -272,7 +266,7 @@ public class HomeActivity extends BaseActivity {
     private void loadMovieBackdrops() {
         if (mMovies == null) return;
         final List<Item> todo = new ArrayList<>();
-        for (int i = 0; i < mMovies.size() && i < 8; i++) {
+        for (int i = 0; i < mMovies.size() && i < HERO_PER_ROW; i++) {
             Item it = mMovies.get(i);
             if (it.backdrop.isEmpty() && !backdrops.containsKey(it.id)) todo.add(it);
             else if (it.backdrop.isEmpty()) it.backdrop = backdrops.get(it.id);
@@ -296,22 +290,18 @@ public class HomeActivity extends BaseActivity {
                 return Boolean.TRUE;
             }
         }, new Net.Ok<Boolean>() {
-            @Override public void ok(Boolean r) { fillHero(Store.continueWatching()); }
+            @Override public void ok(Boolean r) { fillHero(); }
         }, null);
     }
 
-    /** Hero banners: continue watching first, then the newest series and movies. Section cards while nothing is loaded. */
-    private void fillHero(List<Item> cont) {
+    /** Hero banners: the first few series and movies of the chosen folders (continue watching lives in its own row). */
+    private void fillHero() {
         List<CardAdapter.Card> h = new ArrayList<>();
-        for (int i = 0; i < cont.size() && i < 3; i++) {
-            Item it = cont.get(i);
-            h.add(new CardAdapter.Card(it.name, it).sub("Resume " + Ui.fmt(Store.getPosition(it))).badge("CONTINUE").img(it.backdrop.isEmpty() ? it.icon : it.backdrop));
-        }
-        if (mSeries != null) for (int i = 0; i < mSeries.size() && i < 8; i++) {
+        if (mSeries != null) for (int i = 0; i < mSeries.size() && i < HERO_PER_ROW; i++) {
             Item it = mSeries.get(i);
             h.add(new CardAdapter.Card(it.name, it).sub("HMS IPTV").badge("NEW SERIES").img(it.backdrop.isEmpty() ? it.icon : it.backdrop));
         }
-        if (mMovies != null) for (int i = 0; i < mMovies.size() && i < 8; i++) {
+        if (mMovies != null) for (int i = 0; i < mMovies.size() && i < HERO_PER_ROW; i++) {
             Item it = mMovies.get(i);
             h.add(new CardAdapter.Card(it.name, it).sub(it.extra.isEmpty() ? "HMS IPTV" : it.extra).badge("NEW MOVIE").img(it.backdrop.isEmpty() ? it.icon : it.backdrop));
         }
