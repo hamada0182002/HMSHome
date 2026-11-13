@@ -173,6 +173,19 @@ public final class Store {
             p.edit().putString("prog", all.toString()).apply();
         } catch (Exception ignored) { }
     }
+    public static boolean hasProgress(Item it) {
+        try { return new JSONObject(p.getString("prog", "{}")).has(it.key()); } catch (Exception e) { return false; }
+    }
+    /** Puts an item at the top of "Continue watching" with no position yet (the next episode of a series). */
+    public static void touchProgress(Item it) {
+        try {
+            JSONObject all = new JSONObject(p.getString("prog", "{}"));
+            JSONObject o = new JSONObject();
+            o.put("p", 0); o.put("d", 0); o.put("t", System.currentTimeMillis()); o.put("i", it.toJson());
+            all.put(it.key(), o);
+            p.edit().putString("prog", all.toString()).apply();
+        } catch (Exception ignored) { }
+    }
     /** Removes one entry from "Continue watching". */
     public static void removeProgress(Item it) {
         try {

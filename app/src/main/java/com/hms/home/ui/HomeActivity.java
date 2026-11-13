@@ -269,7 +269,8 @@ public class HomeActivity extends BaseActivity {
     private List<TileAdapter.Tile> itemTiles(List<Item> l, boolean resume) {
         List<TileAdapter.Tile> t = new ArrayList<>();
         for (Item it : l) {
-            String sub = resume ? "Resume " + Ui.fmt(Store.getPosition(it)) : it.extra;
+            long rp = resume ? Store.getPosition(it) : 0;
+            String sub = resume ? (rp > 0 ? "Resume " + Ui.fmt(rp) : "Resume next episode") : it.extra;
             t.add(new TileAdapter.Tile(it.name, sub, it.icon, null, it));
         }
         return t;
