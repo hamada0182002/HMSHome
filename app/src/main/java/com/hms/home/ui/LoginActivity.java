@@ -14,6 +14,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.hms.home.R;
 import com.hms.home.data.Account;
 import com.hms.home.data.Net;
+import com.hms.home.data.PairServer;
 import com.hms.home.data.Store;
 import com.hms.home.data.Xtream;
 import java.util.ArrayList;
@@ -43,7 +44,7 @@ public class LoginActivity extends BaseActivity {
         rv.setLayoutManager(new LinearLayoutManager(this));
         ad = new TextAdapter(false, new TextAdapter.Listener() {
             @Override public void click(TextAdapter.Row r, int pos) {
-                if (r.data instanceof Account) accountMenu((Account) r.data); else showForm(null);
+                if (r.data instanceof Account) accountMenu((Account) r.data); else addChooser();
             }
             @Override public void focus(TextAdapter.Row r, int pos) { }
         });
@@ -52,7 +53,9 @@ public class LoginActivity extends BaseActivity {
         setContentView(root);
     }
 
-    @Override protected void onResume() { super.onResume(); build(); if (Store.accounts().isEmpty()) showForm(null); }
+    @Override protected void onStop() { stopPair(); super.onStop(); }
+
+    @Override protected void onResume() { super.onResume(); build(); if (Store.accounts().isEmpty() && pair == null) addChooser(); }
 
     private void build() {
         List<TextAdapter.Row> r = new ArrayList<>();
@@ -62,7 +65,7 @@ public class LoginActivity extends BaseActivity {
             r.add(new TextAdapter.Row((cur ? "★ " : "") + a.name,
                     a.server.replace("http://", "").replace("https://", "") + "   |   " + a.user + (cur ? "   (current)" : ""), a));
         }
-        r.add(new TextAdapter.Row("+  Add account", "Server URL, username and password", "add"));
+        r.add(new TextAdapter.Row("+  Add account", "Type it here, or scan a QR code with your phone", "add"));
         ad.set(r);
     }
 
@@ -106,15 +109,18 @@ public class LoginActivity extends BaseActivity {
     }
 
     /** Add (existing == null) or edit an account. */
-    private void showForm(final Account existing) {
+    private void showForm(final Account existing) { showForm(existing, null); }
+
+    private void showForm(final Account existing, Account prefill) {
+        Account src = prefill != null ? prefill : existing;
         final LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
         box.setPadding(Ui.dp(this, 22), Ui.dp(this, 8), Ui.dp(this, 22), 0);
         final int T = android.text.InputType.TYPE_CLASS_TEXT;
-        final EditText name = field(box, "Account name (optional)", existing == null ? "" : existing.name, T, false);
-        final EditText server = field(box, "Server URL  (http://host:port)", existing == null ? "" : existing.server, T | android.text.InputType.TYPE_TEXT_VARIATION_URI, false);
-        final EditText user = field(box, "Username", existing == null ? "" : existing.user, T, false);
-        final EditText pass = field(box, "Password", existing == null ? "" : existing.pass, T, true);
+        final EditText name = field(box, "Account name (optional)", src == null ? "" : src.name, T, false);
+        final EditText server = field(box, "Server URL  (http://host:port)", src == null ? "" : src.server, T | android.text.InputType.TYPE_TEXT_VARIATION_URI, false);
+        final EditText user = field(box, "Username", src == null ? "" : src.user, T, false);
+        final EditText pass = field(box, "Password", src == null ? "" : src.pass, T, true);
         final TextView msg = Ui.label(this, "", 14, R.color.beige, false);
         msg.setPadding(0, Ui.dp(this, 8), 0, 0);
         box.addView(msg);
@@ -164,5 +170,83 @@ public class LoginActivity extends BaseActivity {
         Xtream.clearCache(); HomeActivity.invalidateMemo();
         toast("تم الحفظ: " + a.name);
         if (activate) finish(); else build();
+    }
+
+    // ---------------- add: type here OR scan a QR with the phone ----------------
+    private PairServer pair;
+    private AlertDialog qrDialog;
+
+    private void addChooser() {
+        String[] items = {"الطريقة العادية - اكتب البيانات هنا", "باركود - ادخل البيانات من الموبايل"};
+        new AlertDialog.Builder(this).setTitle("Add account").setItems(items, new DialogInterface.OnClickListener() {
+            @Override public void onClick(DialogInterface d, int w) { if (w == 0) showForm(null); else showQr(); }
+        }).show();
+    }
+
+    private void stopPair() {
+        if (pair != null) { pair.stop(); pair = null; }
+        if (qrDialog != null) { try { qrDialog.dismiss(); } catch (Exception ignored) { } qrDialog = null; }
+    }
+
+    private void showQr() {
+        stopPair();
+        final PairServer ps = new PairServer(new PairServer.Listener() {
+            @Override public void onData(String name, String server, String user, String pass) { received(name, server, user, pass); }
+        });
+        final String url;
+        try { url = ps.start(); }
+        catch (Exception e) { toast(Net.msg(e)); return; }
+        pair = ps;
+
+        android.graphics.Bitmap qr;
+        try {
+            int size = Math.min(Ui.sh(this) * 55 / 100, Ui.dp(this, 360));
+            com.google.zxing.common.BitMatrix m = new com.google.zxing.qrcode.QRCodeWriter()
+                    .encode(url, com.google.zxing.BarcodeFormat.QR_CODE, size, size);
+            qr = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.RGB_565);
+            for (int x = 0; x < size; x++) for (int y = 0; y < size; y++) qr.setPixel(x, y, m.get(x, y) ? 0xFF000000 : 0xFFFFFFFF);
+        } catch (Exception e) { stopPair(); toast("تعذر إنشاء الباركود"); return; }
+
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setGravity(android.view.Gravity.CENTER_HORIZONTAL);
+        box.setPadding(Ui.dp(this, 24), Ui.dp(this, 12), Ui.dp(this, 24), Ui.dp(this, 4));
+        android.widget.ImageView iv = new android.widget.ImageView(this);
+        iv.setImageBitmap(qr);
+        iv.setBackgroundColor(0xFFFFFFFF);
+        box.addView(iv, new LinearLayout.LayoutParams(qr.getWidth(), qr.getHeight()));
+        TextView steps = Ui.label(this, "1) وصّل الموبايل بنفس شبكة الواي فاي بتاعة التيفي\n2) افتح كاميرا الموبايل وصوّر الباركود\n3) اكتب البيانات واضغط \"إرسال للتيفي\"", 15, R.color.white, false);
+        steps.setPadding(0, Ui.dp(this, 10), 0, 0);
+        box.addView(steps);
+        TextView link = Ui.label(this, url, 13, R.color.secondary, false);
+        link.setPadding(0, Ui.dp(this, 6), 0, 0);
+        box.addView(link);
+        ScrollView sv = new ScrollView(this);
+        sv.addView(box);
+
+        qrDialog = new AlertDialog.Builder(this).setTitle("Scan with your phone").setView(sv)
+                .setNegativeButton("Cancel", null)
+                .setOnDismissListener(new DialogInterface.OnDismissListener() {
+                    @Override public void onDismiss(DialogInterface d) { if (pair == ps) { ps.stop(); pair = null; } }
+                }).create();
+        qrDialog.show();
+    }
+
+    /** Data arrived from the phone: check it like the normal form does, save it, or open the form pre-filled. */
+    private void received(String name, String server, String user, String pass) {
+        stopPair();
+        if (server == null || server.trim().isEmpty()) { toast("البيانات وصلت فاضية"); return; }
+        final Account a = Xtream.buildAccount(null, name, server, user, pass);
+        toast("وصلت البيانات... بيتم التحقق");
+        run(new Callable<JSONObject>() {
+            @Override public JSONObject call() throws Exception { return Xtream.auth(a); }
+        }, new Net.Ok<JSONObject>() {
+            @Override public void ok(JSONObject ui) { commit(a, true); }
+        }, new Net.Fail() {
+            @Override public void fail(Exception e) {
+                toast(Net.msg(e));
+                showForm(null, a);   // let the user fix it (or save without checking)
+            }
+        });
     }
 }

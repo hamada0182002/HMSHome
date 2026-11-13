@@ -50,6 +50,8 @@ dependencies {
     implementation 'androidx.recyclerview:recyclerview:1.2.1'
     // نفس مكتبة الشبكة اللي HMS Player بيستخدمها
     implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    // توليد الباركود (QR) على التيفي
+    implementation 'com.google.zxing:core:3.5.3'
     implementation 'com.google.android.exoplayer:exoplayer-core:2.19.1'
     implementation 'com.google.android.exoplayer:exoplayer-hls:2.19.1'
     implementation 'com.google.android.exoplayer:exoplayer-ui:2.19.1'
