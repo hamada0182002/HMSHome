@@ -39,9 +39,11 @@ public class HomeActivity extends BaseActivity {
     private class Row {
         final TextView title; final RecyclerView rv; final TileAdapter ad;
         Row(String t, int w, int h, boolean icon, TileAdapter.Listener l) {
-            title = Ui.label(HomeActivity.this, t, 18, R.color.beige, true);
-            title.setPadding(Ui.dp(HomeActivity.this, 6), Ui.dp(HomeActivity.this, 14), 0, Ui.dp(HomeActivity.this, 2));
+            title = Ui.label(HomeActivity.this, t, 20, R.color.white, true);
+            title.setPadding(Ui.dp(HomeActivity.this, 12), Ui.dp(HomeActivity.this, 16), 0, Ui.dp(HomeActivity.this, 2));
             rv = new RecyclerView(HomeActivity.this);
+            rv.setClipChildren(false);
+            rv.setPadding(Ui.dp(HomeActivity.this, 6), Ui.dp(HomeActivity.this, 10), Ui.dp(HomeActivity.this, 6), Ui.dp(HomeActivity.this, 14));
             rv.setLayoutManager(new LinearLayoutManager(HomeActivity.this, LinearLayoutManager.HORIZONTAL, false));
             ad = new TileAdapter(w, h, icon, l);
             rv.setAdapter(ad);
@@ -81,19 +83,22 @@ public class HomeActivity extends BaseActivity {
         setContentView(R.layout.activity_home);
         rows = findViewById(R.id.rows);
         LinearLayout nav = findViewById(R.id.nav);
-        String[][] items = {{"HOME", ""}, {"LIVE TV", "live"}, {"MOVIES", "movie"}, {"SERIES", "series"}, {"APPS", "apps"}, {"SEARCH", "search"}, {"SETTINGS", "settings"}};
+        TextView search = Ui.navIcon(this);
+        search.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { Nav.section(HomeActivity.this, "search"); } });
+        nav.addView(search);
+        String[][] items = {{"Home", ""}, {"Live TV", "live"}, {"Movies", "movie"}, {"Series", "series"}, {"Apps", "apps"}, {"Settings", "settings"}};
         for (final String[] it : items) {
             TextView t = Ui.navItem(this, it[0]);
             if (it[1].isEmpty()) t.setSelected(true);
             else t.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { Nav.section(HomeActivity.this, it[1]); } });
             nav.addView(t);
         }
-        rFav = new Row("MY APPS", 110, 110, true, tl);
-        rCont = new Row("CONTINUE WATCHING", 130, 195, false, tl);
-        rLive = new Row("LIVE TV", 150, 90, true, tl);
-        rMovies = new Row("NEW MOVIES", 130, 195, false, tl);
-        rSeries = new Row("SERIES", 130, 195, false, tl);
-        rRecent = new Row("RECENT APPS", 110, 110, true, tl);
+        rFav = new Row("Your apps", 100, 100, true, tl);
+        rCont = new Row("Continue watching", 140, 210, false, tl);
+        rLive = new Row("Live TV", 190, 110, true, tl);
+        rMovies = new Row("New movies", 140, 210, false, tl);
+        rSeries = new Row("Series", 140, 210, false, tl);
+        rRecent = new Row("Recent apps", 100, 100, true, tl);
     }
 
     @Override protected void onStart() {

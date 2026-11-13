@@ -145,11 +145,16 @@ public class PlayerActivity extends Activity {
         super.onStop();
     }
 
+    @Override public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) Ui.immersive(getWindow());
+    }
+
     private void initPlayer() {
         if (player != null) return;
         DefaultHttpDataSource.Factory hf = new DefaultHttpDataSource.Factory()
                 .setConnectTimeoutMs(10000).setReadTimeoutMs(15000).setAllowCrossProtocolRedirects(true)
-                .setUserAgent("HMSHome/1.0 (ExoPlayer)");
+                .setUserAgent(com.hms.home.data.Net.UA);
         DefaultLoadControl lc = new DefaultLoadControl.Builder()
                 .setBufferDurationsMs(15000, 30000, 2000, 4000)
                 .setTargetBufferBytes(12 * 1024 * 1024)

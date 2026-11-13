@@ -35,7 +35,7 @@ public class SearchActivity extends BaseActivity {
         int span = Math.max(2, ((int) (dm.widthPixels / dm.density) - 72) / (130 + 24));
         RecyclerView grid = findViewById(R.id.grid);
         grid.setLayoutManager(new GridLayoutManager(this, span));
-        ad = new TileAdapter(130, 195, true, new TileAdapter.SimpleListener() {
+        ad = new TileAdapter(130, 195, false, new TileAdapter.SimpleListener() {
             @Override public void click(TileAdapter.Tile t, int pos) { Nav.open(SearchActivity.this, (Item) t.data); }
         });
         grid.setAdapter(ad);

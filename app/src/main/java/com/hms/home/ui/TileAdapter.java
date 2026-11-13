@@ -1,6 +1,8 @@
 package com.hms.home.ui;
 
+import android.content.Context;
 import android.graphics.drawable.Drawable;
+import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -54,17 +56,49 @@ public class TileAdapter extends RecyclerView.Adapter<TileAdapter.VH> {
                     return code == KeyEvent.KEYCODE_MENU;
                 }
             });
-            v.setOnFocusChangeListener(new View.OnFocusChangeListener() { @Override public void onFocusChange(View x, boolean f) { int p = getAdapterPosition(); if (f && p >= 0) l.focus(list.get(p), p); } });
+            v.setOnFocusChangeListener(new View.OnFocusChangeListener() {
+                @Override public void onFocusChange(View x, boolean f) {
+                    float sc = f ? 1.1f : 1f;
+                    x.animate().scaleX(sc).scaleY(sc).setDuration(120).start();
+                    int p = getAdapterPosition(); if (f && p >= 0) l.focus(list.get(p), p);
+                }
+            });
         }
     }
 
+    @Override public void onAttachedToRecyclerView(RecyclerView rv) { rv.setClipChildren(false); }
+
     @Override public VH onCreateViewHolder(ViewGroup p, int type) {
-        View v = LayoutInflater.from(p.getContext()).inflate(R.layout.item_tile, p, false);
+        Context c = p.getContext();
+        View v = LayoutInflater.from(c).inflate(R.layout.item_tile, p, false);
         ImageView img = v.findViewById(R.id.img);
         ViewGroup.LayoutParams lp = img.getLayoutParams();
-        lp.width = Ui.dp(p.getContext(), w); lp.height = Ui.dp(p.getContext(), h);
-        img.setScaleType(iconMode ? ImageView.ScaleType.FIT_CENTER : ImageView.ScaleType.CENTER_CROP);
-        if (iconMode) img.setPadding(Ui.dp(p.getContext(), 8), Ui.dp(p.getContext(), 8), Ui.dp(p.getContext(), 8), Ui.dp(p.getContext(), 8));
+        lp.width = Ui.dp(c, w); lp.height = Ui.dp(c, h);
+        TextView title = v.findViewById(R.id.title), sub = v.findViewById(R.id.sub);
+        if (iconMode && w == h) {
+            // app icon: round, Google TV style
+            int pd = Ui.dp(c, w * 0.2f);
+            img.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            img.setBackgroundResource(R.drawable.bg_icon_circle);
+            img.setPadding(pd, pd, pd, pd);
+            Ui.clip(img, 0, true);
+            title.setGravity(Gravity.CENTER_HORIZONTAL);
+            sub.setGravity(Gravity.CENTER_HORIZONTAL);
+        } else if (iconMode) {
+            // channel logo: light rounded card
+            int pd = Ui.dp(c, 12);
+            img.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            img.setBackgroundResource(R.drawable.bg_logo);
+            img.setPadding(pd, pd, pd, pd);
+            Ui.clip(img, Ui.dp(c, 16), false);
+        } else {
+            // poster: rounded corners with a white frame on focus
+            int pd = Ui.dp(c, 3);
+            img.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            img.setBackgroundResource(R.drawable.bg_poster);
+            img.setPadding(pd, pd, pd, pd);
+            Ui.clip(img, Ui.dp(c, 16), false);
+        }
         return new VH(v);
     }
 

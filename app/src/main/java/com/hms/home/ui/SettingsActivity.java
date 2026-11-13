@@ -13,21 +13,26 @@ import com.hms.home.BuildConfig;
 import com.hms.home.R;
 import com.hms.home.data.AppsManager;
 import com.hms.home.data.ImageLoader;
+import com.hms.home.data.Net;
+import com.hms.home.data.Updater;
 import com.hms.home.data.Store;
 import com.hms.home.data.Xtream;
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Callable;
 
 public class SettingsActivity extends BaseActivity {
     private TextAdapter ad;
     private static final String[] ASPECT = {"Fit", "Stretch", "Zoom"};
+    private static final String[] FONT = {"Normal", "Large", "Extra large"};
 
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
         android.widget.LinearLayout root = new android.widget.LinearLayout(this);
         root.setOrientation(android.widget.LinearLayout.VERTICAL);
         root.setPadding(Ui.dp(this, 48), Ui.dp(this, 30), Ui.dp(this, 48), Ui.dp(this, 20));
-        TextView title = Ui.label(this, "SETTINGS", 28, R.color.bronze, true);
+        TextView title = Ui.label(this, "Settings", 30, R.color.white, true);
         root.addView(title);
         RecyclerView rv = new RecyclerView(this);
         rv.setLayoutManager(new LinearLayoutManager(this));
@@ -44,9 +49,11 @@ public class SettingsActivity extends BaseActivity {
 
     private void build() {
         List<TextAdapter.Row> r = new ArrayList<>();
+        r.add(new TextAdapter.Row("Check for updates", "Current version " + BuildConfig.VERSION_NAME + "  -  downloads and installs the newest version online", "update"));
         r.add(new TextAdapter.Row("IPTV account", Store.hasLogin() ? Store.user() + " @ " + Store.server() + (Store.isSaved() ? "" : "  (session only)") : "Not logged in", "account"));
         if (Store.hasLogin()) r.add(new TextAdapter.Row("Log out of IPTV", "Removes saved login", "logout"));
         r.add(new TextAdapter.Row("Reload IPTV data", "Re-downloads channel / movie / series index next time", "reload"));
+        r.add(new TextAdapter.Row("Font size", FONT[Store.fontLevel()] + "  (press OK to change)", "font"));
         r.add(new TextAdapter.Row("Default aspect ratio", ASPECT[Store.aspect()], "aspect"));
         r.add(new TextAdapter.Row("Default subtitles", Store.subsDefault() ? "On" : "Off", "subs"));
         r.add(new TextAdapter.Row("Manage favorite apps", "Open APPS (hold OK on an app)", "apps"));
@@ -62,6 +69,8 @@ public class SettingsActivity extends BaseActivity {
             case "account": startActivity(new Intent(this, LoginActivity.class)); break;
             case "logout": Store.logout(); Xtream.clearCache(); HomeActivity.invalidateMemo(); toast("تم تسجيل الخروج"); build(); break;
             case "reload": Xtream.clearCache(); HomeActivity.invalidateMemo(); toast("هيتم تحميل بيانات IPTV من جديد"); break;
+            case "update": checkUpdate(); break;
+            case "font": Store.setFontLevel((Store.fontLevel() + 1) % 3); recreate(); break;
             case "aspect": Store.setAspect((Store.aspect() + 1) % 3); build(); break;
             case "subs": Store.setSubsDefault(!Store.subsDefault()); build(); break;
             case "apps": startActivity(new Intent(this, AppsActivity.class)); break;
@@ -80,5 +89,60 @@ public class SettingsActivity extends BaseActivity {
                 break;
             default: break;
         }
+    }
+
+    private void showMsg(String title, String msg) {
+        new AlertDialog.Builder(this).setTitle(title).setMessage(msg).setPositiveButton("OK", null).show();
+    }
+
+    private void checkUpdate() {
+        toast("Checking for updates…");
+        run(new Callable<Updater.Info>() {
+            @Override public Updater.Info call() throws Exception { return Updater.check(BuildConfig.VERSION_NAME); }
+        }, new Net.Ok<Updater.Info>() {
+            @Override public void ok(Updater.Info i) {
+                if (i == null) showMsg("Up to date", "You already have the latest version (" + BuildConfig.VERSION_NAME + ").");
+                else askInstall(i);
+            }
+        }, new Net.Fail() {
+            @Override public void fail(Exception e) { showMsg("Update check failed", Net.msg(e)); }
+        });
+    }
+
+    private void askInstall(final Updater.Info info) {
+        String notes = info.notes.isEmpty() ? "" : "\n\n" + (info.notes.length() > 400 ? info.notes.substring(0, 400) + "…" : info.notes);
+        new AlertDialog.Builder(this)
+                .setTitle("New version " + info.version)
+                .setMessage("You have " + BuildConfig.VERSION_NAME + ". Download and install " + info.version + " now?" + notes)
+                .setPositiveButton("Update", new DialogInterface.OnClickListener() {
+                    @Override public void onClick(DialogInterface d, int w) { download(info); }
+                })
+                .setNegativeButton("Later", null).show();
+    }
+
+    private void download(final Updater.Info info) {
+        final TextView pt = new TextView(this);
+        pt.setPadding(Ui.dp(this, 24), Ui.dp(this, 16), Ui.dp(this, 24), Ui.dp(this, 16));
+        pt.setTextSize(18);
+        pt.setText("Downloading… 0%");
+        final AlertDialog pd = new AlertDialog.Builder(this).setTitle("Updating").setView(pt).setCancelable(false).create();
+        pd.show();
+        run(new Callable<File>() {
+            @Override public File call() throws Exception {
+                return Updater.download(getApplicationContext(), info, new Updater.Progress() {
+                    @Override public void percent(final int p) {
+                        runOnUiThread(new Runnable() { @Override public void run() { pt.setText("Downloading… " + p + "%"); } });
+                    }
+                });
+            }
+        }, new Net.Ok<File>() {
+            @Override public void ok(File f) {
+                pd.dismiss();
+                if (!Updater.install(SettingsActivity.this, f))
+                    showMsg("Allow installing", "Turn on \"Install unknown apps\" for HMS HOME in the screen that just opened, then come back and press Check for updates again.");
+            }
+        }, new Net.Fail() {
+            @Override public void fail(Exception e) { pd.dismiss(); showMsg("Download failed", Net.msg(e)); }
+        });
     }
 }

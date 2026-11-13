@@ -1,20 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent" android:layout_height="match_parent"
-    android:orientation="vertical" android:paddingLeft="36dp" android:paddingRight="36dp" android:paddingTop="20dp">
+    android:orientation="vertical" android:clipChildren="false"
+    android:paddingLeft="48dp" android:paddingRight="48dp" android:paddingTop="24dp">
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical" android:orientation="horizontal">
-        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="HMS HOME"
-            android:textColor="@color/bronze" android:textSize="30sp" android:textStyle="bold" android:letterSpacing="0.12"/>
+        <TextView android:id="@+id/avatar" android:layout_width="56dp" android:layout_height="56dp" android:gravity="center"
+            android:text="H" android:textColor="@color/white" android:textSize="24sp" android:textStyle="bold" android:background="@drawable/bg_avatar"/>
+        <LinearLayout android:id="@+id/nav" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:layout_marginLeft="20dp" android:padding="5dp" android:orientation="horizontal" android:gravity="center_vertical"
+            android:background="@drawable/bg_pill"/>
         <View android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1"/>
         <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="vertical" android:gravity="end">
-            <TextClock android:id="@+id/clock" android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:format12Hour="hh:mm a" android:format24Hour="HH:mm" android:textColor="@color/white" android:textSize="28sp"/>
+            <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+                <TextClock android:id="@+id/clock" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:format12Hour="h:mm a" android:format24Hour="HH:mm" android:textColor="@color/white" android:textSize="26sp"/>
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="  |  HMS Home"
+                    android:textColor="@color/secondary" android:textSize="18sp"/>
+            </LinearLayout>
             <TextClock android:id="@+id/date" android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:format12Hour="EEEE d MMMM yyyy" android:format24Hour="EEEE d MMMM yyyy" android:textColor="@color/secondary" android:textSize="14sp"/>
+                android:format12Hour="EEEE, d MMMM yyyy" android:format24Hour="EEEE, d MMMM yyyy" android:textColor="@color/secondary" android:textSize="15sp"/>
         </LinearLayout>
     </LinearLayout>
-    <LinearLayout android:id="@+id/nav" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:orientation="horizontal"/>
-    <ScrollView android:id="@+id/scroll" android:layout_width="match_parent" android:layout_height="match_parent" android:fillViewport="true" android:scrollbars="none">
-        <LinearLayout android:id="@+id/rows" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingBottom="30dp"/>
+    <ScrollView android:id="@+id/scroll" android:layout_width="match_parent" android:layout_height="match_parent"
+        android:layout_marginTop="8dp" android:fillViewport="true" android:scrollbars="none" android:clipChildren="false">
+        <LinearLayout android:id="@+id/rows" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="vertical" android:clipChildren="false" android:paddingBottom="40dp"/>
     </ScrollView>
 </LinearLayout>

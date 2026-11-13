@@ -135,6 +135,10 @@ public final class Store {
     }
 
     // ---- settings ----
+    /** 0 = normal, 1 = large (default), 2 = extra large */
+    public static int fontLevel() { return p.getInt("font", 1); }
+    public static void setFontLevel(int v) { p.edit().putInt("font", v).apply(); }
+    public static float fontScale() { int l = fontLevel(); return l == 0 ? 1.0f : l == 1 ? 1.2f : 1.4f; }
     public static int aspect() { return p.getInt("aspect", 0); }
     public static void setAspect(int v) { p.edit().putInt("aspect", v).apply(); }
     public static boolean subsDefault() { return p.getBoolean("subs", false); }
