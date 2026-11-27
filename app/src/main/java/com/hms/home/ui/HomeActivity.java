@@ -56,6 +56,7 @@ public class HomeActivity extends BaseActivity {
             online = ni != null && ni.isConnected();
         } catch (Exception ignored) { }
         btnWifi.setAlpha(online ? 1f : 0.3f);
+        if (frost != null) frost.setWifiOn(online);          // connected -> blue Wi-Fi icon
         boolean usb = false;
         if (android.os.Build.VERSION.SDK_INT >= 24) {
             try {
@@ -245,7 +246,7 @@ public class HomeActivity extends BaseActivity {
         scroll = findViewById(R.id.scroll);
         frost = findViewById(R.id.topbar);
         frost.attach(scroll);
-        frost.post(new Runnable() { @Override public void run() { scroll.setTopInset(frost.getHeight()); frost.refresh(); } });
+        frost.post(new Runnable() { @Override public void run() { scroll.setTopInset(frost.barHeight()); frost.refresh(); } });
         getWindow().getDecorView().getViewTreeObserver().addOnGlobalFocusChangeListener(new android.view.ViewTreeObserver.OnGlobalFocusChangeListener() {
             @Override public void onGlobalFocusChanged(View o, View n) {
                 frost.refresh();
