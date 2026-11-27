@@ -41,7 +41,8 @@ public class HomeActivity extends BaseActivity {
     private final java.util.Map<RecyclerView, Integer> lastPos = new java.util.HashMap<>();
     private boolean opening;
     private ImageView btnWifi, icUsb, wIcon;
-    private ScrollView scroll;
+    private GlassScrollView scroll;
+    private FrostBar frost;
     private View wBox, wDivider;
     private TextView wCity, wHum, wTemp;
     private List<CardAdapter.Card> sc;
@@ -242,6 +243,15 @@ public class HomeActivity extends BaseActivity {
         setContentView(R.layout.activity_home);
         rows = findViewById(R.id.rows);
         scroll = findViewById(R.id.scroll);
+        frost = findViewById(R.id.topbar);
+        frost.attach(scroll);
+        frost.post(new Runnable() { @Override public void run() { scroll.setTopInset(frost.getHeight()); frost.refresh(); } });
+        getWindow().getDecorView().getViewTreeObserver().addOnGlobalFocusChangeListener(new android.view.ViewTreeObserver.OnGlobalFocusChangeListener() {
+            @Override public void onGlobalFocusChanged(View o, View n) {
+                frost.refresh();
+                frost.postDelayed(new Runnable() { @Override public void run() { frost.refresh(); } }, 260);
+            }
+        });
         wBox = findViewById(R.id.weatherBox); wDivider = findViewById(R.id.wDivider);
         wCity = findViewById(R.id.wCity); wHum = findViewById(R.id.wHum); wTemp = findViewById(R.id.wTemp); wIcon = findViewById(R.id.wIcon);
         if (android.text.format.DateFormat.is24HourFormat(this)) findViewById(R.id.ampm).setVisibility(View.GONE);
