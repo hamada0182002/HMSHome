@@ -40,15 +40,12 @@ public class HomeActivity extends BaseActivity {
     private RecyclerView appsRv, shortcutsRv;
     private final java.util.Map<RecyclerView, Integer> lastPos = new java.util.HashMap<>();
     private boolean opening;
-    private ImageView btnWifi, icUsb, backdrop, wIcon;
+    private ImageView btnWifi, icUsb, wIcon;
     private ScrollView scroll;
     private View wBox, wDivider;
     private TextView wCity, wHum, wTemp;
     private List<CardAdapter.Card> sc;
     private CardAdapter.Card movieCard, seriesCard;
-    private String curKey = "live", shownKey;
-    private boolean inShortcuts;
-    private static final float BACKDROP_ALPHA = 0.6f;
 
     /** Wi-Fi icon: faded when there is no connection, clear when connected. USB icon: only while a flash drive is mounted. */
     private void updateStatus() {
@@ -98,13 +95,6 @@ public class HomeActivity extends BaseActivity {
                 Item it = (Item) d;
                 if (k.sub != null && k.sub.startsWith("Resume")) Nav.resume(HomeActivity.this, it); else Nav.open(HomeActivity.this, it);
             } else if (d instanceof String) Nav.section(HomeActivity.this, (String) d);
-        }
-        @Override public void focus(CardAdapter.Card k) {
-            if (!(k.data instanceof String)) return;
-            String key = (String) k.data;
-            if (!key.equals("live") && !key.equals("movie") && !key.equals("series") && !key.equals("quran")) return;
-            curKey = key; inShortcuts = true;
-            showBackdrop(key);
         }
         @Override public void menu(CardAdapter.Card k) {
             if (k.data instanceof AppsManager.App) AppMenu.show(HomeActivity.this, (AppsManager.App) k.data, new Runnable() { @Override public void run() { refresh(); } });
@@ -234,7 +224,7 @@ public class HomeActivity extends BaseActivity {
     }
 
     private TextView sectionTitle(String t) {
-        TextView tv = Ui.label(this, t, 20, R.color.white, true);
+        TextView tv = Ui.label(this, t, 20, R.color.h_ink, true);
         tv.setPadding(Ui.dp(this, 56), Ui.dp(this, 10), 0, Ui.dp(this, 0));
         return tv;
     }
@@ -242,45 +232,40 @@ public class HomeActivity extends BaseActivity {
     private void bindIcon(int id, final Runnable r, int tint) {
         ImageView v = findViewById(id);
         v.setImageTintList(new android.content.res.ColorStateList(
-                new int[][]{{android.R.attr.state_focused}, {}}, new int[]{0xFF1B1F2A, 0xFFFFFFFF}));
+                new int[][]{{android.R.attr.state_focused}, {}}, new int[]{0xFF1B1F2A, 0xFF1B1F2A}));
         v.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View x) { r.run(); } });
     }
 
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
-        getWindow().setBackgroundDrawableResource(R.drawable.bg_home_dark);
+        getWindow().setBackgroundDrawableResource(R.drawable.bg_home_light);
         setContentView(R.layout.activity_home);
         rows = findViewById(R.id.rows);
         scroll = findViewById(R.id.scroll);
-        backdrop = findViewById(R.id.backdrop);
         wBox = findViewById(R.id.weatherBox); wDivider = findViewById(R.id.wDivider);
         wCity = findViewById(R.id.wCity); wHum = findViewById(R.id.wHum); wTemp = findViewById(R.id.wTemp); wIcon = findViewById(R.id.wIcon);
         if (android.text.format.DateFormat.is24HourFormat(this)) findViewById(R.id.ampm).setVisibility(View.GONE);
-        setupBackdropFades();
 
         int tint = 0;
         btnWifi = findViewById(R.id.btnWifi);
         icUsb = findViewById(R.id.icUsb);
-        icUsb.setColorFilter(0xFFFFFFFF);
+        icUsb.setColorFilter(0xFF1B1F2A);
         bindIcon(R.id.btnWifi, new Runnable() { @Override public void run() { Nav.wifiSettings(HomeActivity.this); } }, tint);
         bindIcon(R.id.btnDevice, new Runnable() { @Override public void run() { Nav.deviceSettings(HomeActivity.this); } }, tint);   // Android settings
         bindIcon(R.id.btnApp, new Runnable() { @Override public void run() { Nav.section(HomeActivity.this, "settings"); } }, tint);  // HMS HOME settings
 
-        // 1) Live / Movies / Series / Quran: glass cards side by side, centered, lower-middle of the screen
-        //    (the space above is where the big blurred picture shows)
-        rows.addView(new View(this), new LinearLayout.LayoutParams(-1, Math.round(Ui.sh(this) * 0.25f)));
+        // 1) Live / Movies / Series / Quran: wide picture cards (the picture is inside the card, its edges fade into dark)
+        rows.addView(new View(this), new LinearLayout.LayoutParams(-1, Math.round(Ui.sh(this) * 0.015f)));
         shortcuts = new CardAdapter(CardAdapter.SHORTCUT, cl);
-        shortcutsRv = centeredList(shortcuts);
-        LinearLayout.LayoutParams scp = new LinearLayout.LayoutParams(-2, -2);
-        scp.gravity = android.view.Gravity.CENTER_HORIZONTAL;
-        rows.addView(shortcutsRv, scp);
+        shortcutsRv = heroList(shortcuts);
+        rows.addView(shortcutsRv, new LinearLayout.LayoutParams(-1, -2));
         sc = new ArrayList<>();
-        sc.add(new CardAdapter.Card("Live", "live").vec(R.drawable.ic_hm_tv).sub("Live TV channels"));
-        movieCard = new CardAdapter.Card("Movies", "movie").vec(R.drawable.ic_hm_movie).sub("Latest movies");
-        seriesCard = new CardAdapter.Card("Series", "series").vec(R.drawable.ic_hm_series).sub("Latest series");
+        sc.add(new CardAdapter.Card("Live", "live").sub("Live TV channels").image(R.drawable.bg_live).badge("LIVE"));
+        movieCard = new CardAdapter.Card("Movies", "movie").sub("Latest movies").badge("NEW MOVIE");
+        seriesCard = new CardAdapter.Card("Series", "series").sub("Latest series").badge("NEW SERIES");
         sc.add(movieCard);
         sc.add(seriesCard);
-        sc.add(new CardAdapter.Card("Quran", "quran").vec(R.drawable.ic_hm_quran).sub("Holy Quran"));
+        sc.add(new CardAdapter.Card("Quran", "quran").sub("Holy Quran").image(R.drawable.bg_quran).badge("QURAN"));
         shortcuts.set(sc);
         FocusNav.focusPos(shortcutsRv, 0);
 
@@ -289,7 +274,7 @@ public class HomeActivity extends BaseActivity {
         appsRv = horizontalList(apps, 14);
         appsRv.setPadding(Ui.dp(this, 14), Ui.dp(this, 14), Ui.dp(this, 14), Ui.dp(this, 14));
         LinearLayout bar = new LinearLayout(this);
-        bar.setBackgroundResource(R.drawable.bg_apps_bar);
+        bar.setBackgroundResource(R.drawable.bg_apps_bar_l);
         bar.setClipChildren(false);
         bar.setGravity(android.view.Gravity.CENTER_HORIZONTAL);
         bar.addView(appsRv, new LinearLayout.LayoutParams(-2, -2));
@@ -298,10 +283,10 @@ public class HomeActivity extends BaseActivity {
         rows.addView(bar, bp);
 
         // 3) poster rows: continue watching, new movies, new series (normal size)
-        tCont = new TileAdapter(140, 210, false, false, tl);
-        tMovies = new TileAdapter(140, 210, false, false, tl);
-        tSeries = new TileAdapter(140, 210, false, false, tl);
-        tFav = new TileAdapter(190, 110, true, false, tl);
+        tCont = new TileAdapter(140, 210, false, true, tl);
+        tMovies = new TileAdapter(140, 210, false, true, tl);
+        tSeries = new TileAdapter(140, 210, false, true, tl);
+        tFav = new TileAdapter(190, 110, true, true, tl);
 
         tContT = sectionTitle("Continue watching"); rCont = horizontalList(tCont, 48);
         tMoviesT = sectionTitle("New movies"); rMovies = horizontalList(tMovies, 48);
@@ -320,71 +305,32 @@ public class HomeActivity extends BaseActivity {
         tFavT.setVisibility(View.GONE); rFav.setVisibility(View.GONE);
         titled.add(new View[]{tFavT, rFav});
 
-        // the big picture only shows while the cursor is on one of the shortcut cards
-        getWindow().getDecorView().getViewTreeObserver().addOnGlobalFocusChangeListener(new ViewTreeObserver.OnGlobalFocusChangeListener() {
-            @Override public void onGlobalFocusChanged(View oldFocus, View newFocus) {
-                boolean in = newFocus != null && FocusNav.listOf(newFocus) == shortcutsRv;
-                if (in == inShortcuts) return;
-                inShortcuts = in;
-                if (in) showBackdrop(curKey); else hideBackdrop();
-            }
-        });
     }
 
-    // ---------------- big blurred picture behind the cards ----------------
-    private void setupBackdropFades() {
-        FrameLayout box = findViewById(R.id.backdropBox);
-        int sw = Ui.sw(this), sh = Ui.sh(this);
-        addFade(box, R.drawable.fade_left, Math.round(sw * 0.32f), -1, android.view.Gravity.LEFT);
-        addFade(box, R.drawable.fade_right, Math.round(sw * 0.32f), -1, android.view.Gravity.RIGHT);
-        addFade(box, R.drawable.fade_top, -1, Math.round(sh * 0.30f), android.view.Gravity.TOP);
-        addFade(box, R.drawable.fade_bottom, -1, Math.round(sh * 0.55f), android.view.Gravity.BOTTOM);
+    /** Row of wide picture cards, left aligned, scrolling sideways (the next card peeks in at the right edge). */
+    private RecyclerView heroList(RecyclerView.Adapter<?> ad) {
+        RecyclerView rv = new RecyclerView(this);
+        rv.setClipChildren(false);
+        rv.setClipToPadding(false);
+        rv.setItemAnimator(null);
+        rv.setPadding(Ui.dp(this, 34), Ui.dp(this, 14), Ui.dp(this, 24), Ui.dp(this, 14));
+        rv.setLayoutManager(new LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false));
+        rv.setAdapter(ad);
+        return rv;
     }
 
-    private void addFade(FrameLayout box, int res, int w, int h, int gravity) {
-        View v = new View(this);
-        v.setBackgroundResource(res);
-        box.addView(v, new FrameLayout.LayoutParams(w, h, gravity));
-    }
-
-    /** Integer = picture inside the app (Live / Quran), String = url (latest movie / series), null = nothing to show yet. */
-    private Object backdropFor(String key) {
-        if (key.equals("live")) return R.drawable.bg_live;
-        if (key.equals("quran")) return R.drawable.bg_quran;
-        List<Item> l = key.equals("movie") ? mMovies : mSeries;
-        if (l == null || l.isEmpty()) return null;
+    /** Picture for the Movies / Series card: the newest title's wide picture, or its poster when there is none. */
+    private String cardPicture(List<Item> l) {
+        if (l == null || l.isEmpty()) return "";
         Item it = l.get(0);
         String u = it.backdrop != null && !it.backdrop.isEmpty() ? it.backdrop : it.icon;
-        return u != null && u.startsWith("http") ? u : null;
+        return u != null && u.startsWith("http") ? u : "";
     }
 
-    private void fadeBackdropIn() { backdrop.animate().alpha(BACKDROP_ALPHA).setDuration(350).start(); }
-
-    private void hideBackdrop() {
-        backdrop.animate().cancel();
-        backdrop.animate().alpha(0f).setDuration(250).start();
-    }
-
-    private void showBackdrop(final String key) {
-        final Object src = backdropFor(key);
-        if (src == null) { shownKey = null; hideBackdrop(); return; }
-        if (key.equals(shownKey)) { fadeBackdropIn(); return; }
-        shownKey = key;
-        backdrop.animate().cancel();
-        backdrop.animate().alpha(0f).setDuration(120).withEndAction(new Runnable() {
-            @Override public void run() {
-                if (!key.equals(shownKey)) return;
-                if (src instanceof Integer) {
-                    backdrop.setTag(null);
-                    backdrop.setImageResource((Integer) src);
-                    if (inShortcuts) fadeBackdropIn();
-                } else {
-                    ImageLoader.loadSoft(backdrop, (String) src, new Runnable() {
-                        @Override public void run() { if (inShortcuts && key.equals(shownKey)) fadeBackdropIn(); }
-                    });
-                }
-            }
-        }).start();
+    private void updateCardPictures() {
+        movieCard.imageUrl(cardPicture(mMovies));
+        seriesCard.imageUrl(cardPicture(mSeries));
+        shortcuts.changed(1); shortcuts.changed(2);
     }
 
     // ---------------- weather (next to the clock) ----------------
@@ -545,9 +491,8 @@ public class HomeActivity extends BaseActivity {
         show(tSeriesT, rSeries, !mSeries.isEmpty());
         movieCard.sub(mMovies.isEmpty() ? "Latest movies" : "Latest: " + mMovies.get(0).name);
         seriesCard.sub(mSeries.isEmpty() ? "Latest series" : "Latest: " + mSeries.get(0).name);
-        shortcuts.changed(1); shortcuts.changed(2);
+        updateCardPictures();
         loadMovieBackdrop();
-        if (inShortcuts && (curKey.equals("movie") || curKey.equals("series"))) { shownKey = null; showBackdrop(curKey); }
     }
 
     /** The newest movie's wide picture (the list only has its small poster); refreshes the big picture when it arrives. */
@@ -574,7 +519,7 @@ public class HomeActivity extends BaseActivity {
             @Override public void ok(String u) {
                 backdrops.put(it.id, u);
                 it.backdrop = u;
-                if (!u.isEmpty() && inShortcuts && curKey.equals("movie")) { shownKey = null; showBackdrop("movie"); }
+                if (!u.isEmpty()) updateCardPictures();
             }
         }, null);
     }
