@@ -4,7 +4,10 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.DialogInterface;
 import android.content.res.ColorStateList;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Color;
+import android.graphics.Matrix;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -83,6 +86,9 @@ public class PlayerActivity extends Activity implements DlnaBridge.Controller {
     private boolean dlna, dlnaMuted;      // casting from a phone (DLNA): plain URL, no progress saving
     private int dlnaVol = 100;
     private String lastDlnaState = "";
+    private boolean imageMode;            // casting a photo: shown in imgView, no ExoPlayer
+    private ImageView imgView;
+    private int imgGen;
     private Net.Task epgTask;
 
     private static final String LIVE_EXT = "m3u8";   // /live/user/pass/id.m3u8
@@ -247,13 +253,14 @@ public class PlayerActivity extends Activity implements DlnaBridge.Controller {
         if (player != null) play(Math.min(idx, PlayQueue.items.size() - 1));   // (if stopped, onStart plays it)
     }
 
-    @Override public void dlnaPlay() { playNow(); }
-    @Override public void dlnaPause() { if (player != null) player.pause(); }
+    @Override public void dlnaPlay() { if (!imageMode) playNow(); }
+    @Override public void dlnaPause() { if (player != null && !imageMode) player.pause(); }
     @Override public void dlnaStop() { DlnaBridge.state = "STOPPED"; DlnaBridge.changed(); close(); }
-    @Override public void dlnaSeek(long ms) { if (player != null) { player.seekTo(Math.max(0, ms)); tick(); } }
-    @Override public void dlnaSetUri(String uri, String title) {
+    @Override public void dlnaSeek(long ms) { if (player != null && !imageMode) { player.seekTo(Math.max(0, ms)); tick(); } }
+    @Override public void dlnaSetUri(String uri, String title, boolean image) {
         Item it = new Item();
         it.type = "dlna"; it.id = uri; it.name = title; it.ext = uri;
+        if (image) it.extra = "image";
         List<Item> l = new ArrayList<>(); l.add(it);
         PlayQueue.set(l, 0);
         if (player != null) play(0);
@@ -264,7 +271,7 @@ public class PlayerActivity extends Activity implements DlnaBridge.Controller {
 
     /** Tells the phone what we are doing (PLAYING / PAUSED / ...) and where we are. */
     private void publishDlna() {
-        if (!dlna || player == null) return;
+        if (!dlna || player == null || imageMode) return;
         String st;
         int ps = player.getPlaybackState();
         if (ps == Player.STATE_BUFFERING) st = "TRANSITIONING";
@@ -274,6 +281,75 @@ public class PlayerActivity extends Activity implements DlnaBridge.Controller {
         DlnaBridge.posMs = pos;
         DlnaBridge.durMs = dur;
         if (!st.equals(lastDlnaState)) { lastDlnaState = st; DlnaBridge.state = st; DlnaBridge.changed(); }
+    }
+
+    // ---- photos ----
+    private void hideImage() {
+        imgGen++;
+        if (imgView != null) { imgView.setVisibility(View.GONE); imgView.setImageDrawable(null); }
+        pv.setVisibility(View.VISIBLE);
+    }
+
+    private void showImage(final String url) {
+        if (player != null) { player.stop(); player.clearMediaItems(); }
+        if (imgView == null) {
+            imgView = new ImageView(this);
+            imgView.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            imgView.setBackgroundColor(Color.BLACK);
+            root.addView(imgView, 1, new FrameLayout.LayoutParams(-1, -1));
+        }
+        pv.setVisibility(View.GONE);
+        imgView.setImageDrawable(null);
+        imgView.setVisibility(View.VISIBLE);
+        hideOverlay();
+        spinner.setVisibility(View.VISIBLE);
+        DlnaBridge.state = "PLAYING"; DlnaBridge.posMs = 0; DlnaBridge.durMs = 0; DlnaBridge.changed();
+        final int gen = ++imgGen;
+        new Thread(new Runnable() { @Override public void run() {
+            Bitmap bm = null;
+            try { bm = fetchBitmap(url); } catch (Throwable ignored) { }
+            final Bitmap res = bm;
+            runOnUiThread(new Runnable() { @Override public void run() {
+                if (gen != imgGen || imgView == null) return;
+                spinner.setVisibility(View.GONE);
+                if (res != null) imgView.setImageBitmap(res);
+                else flash("تعذّر عرض الصورة");
+            } });
+        } }).start();
+    }
+
+    /** Downloads the photo, scales it down to the screen size and fixes the phone's rotation. */
+    private Bitmap fetchBitmap(String url) throws Exception {
+        java.net.HttpURLConnection c = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+        c.setConnectTimeout(15000); c.setReadTimeout(30000); c.setInstanceFollowRedirects(true);
+        c.setRequestProperty("User-Agent", Net.UA);
+        java.io.File f = new java.io.File(getCacheDir(), "dlna_img.tmp");
+        java.io.InputStream in = c.getInputStream();
+        java.io.OutputStream out = new java.io.FileOutputStream(f);
+        byte[] buf = new byte[16384]; int n; long total = 0;
+        while ((n = in.read(buf)) > 0 && total < 40L * 1024 * 1024) { out.write(buf, 0, n); total += n; }
+        out.close(); in.close(); c.disconnect();
+        android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
+        int target = Math.max(1280, Math.max(dm.widthPixels, dm.heightPixels));
+        BitmapFactory.Options o = new BitmapFactory.Options();
+        o.inJustDecodeBounds = true;
+        BitmapFactory.decodeFile(f.getPath(), o);
+        int ss = 1;
+        while (Math.max(o.outWidth, o.outHeight) / (ss * 2) >= target) ss *= 2;
+        o = new BitmapFactory.Options();
+        o.inSampleSize = ss;
+        Bitmap b = BitmapFactory.decodeFile(f.getPath(), o);
+        if (b == null) return null;
+        int deg = 0;
+        try {
+            int ori = new android.media.ExifInterface(f.getPath()).getAttributeInt(android.media.ExifInterface.TAG_ORIENTATION, 1);
+            deg = ori == 6 ? 90 : ori == 3 ? 180 : ori == 8 ? 270 : 0;
+        } catch (Throwable ignored) { }
+        if (deg != 0) {
+            Matrix m = new Matrix(); m.postRotate(deg);
+            b = Bitmap.createBitmap(b, 0, 0, b.getWidth(), b.getHeight(), m, true);
+        }
+        return b;
     }
 
     private void releaseDlna() {
@@ -367,6 +443,7 @@ public class PlayerActivity extends Activity implements DlnaBridge.Controller {
         cur = PlayQueue.items.get(i);
         live = cur.type.equals("live");
         dlna = cur.type.equals("dlna");
+        imageMode = dlna && "image".equals(cur.extra);
         DlnaBridge.controller = dlna ? this : null;
         lastDlnaState = "";
         retries = 0; everPlayed = false; failed = false; retryPending = false; message = null; pos = 0; dur = 0;
@@ -379,7 +456,8 @@ public class PlayerActivity extends Activity implements DlnaBridge.Controller {
         updateButtons();
         if (live) loadEpg();
         updateOverlays();
-        load(cur, start);
+        if (imageMode) showImage(cur.ext);
+        else { hideImage(); load(cur, start); }
     }
 
     private void updateButtons() {
@@ -419,11 +497,12 @@ public class PlayerActivity extends Activity implements DlnaBridge.Controller {
     private void reconnect(PlaybackException e) {
         if (player == null || retryPending) return;
         retries++;
-        int limit = (!everPlayed && !live) ? 2 : 8;
+        int limit = dlna ? 1 : (!everPlayed && !live) ? 2 : 8;
         String code = e == null ? "?" : e.getErrorCodeName();
         if (retries > limit) {
             failed = true;
-            message = !everPlayed && !live
+            message = dlna ? "تعذّر تشغيل الملف (" + code + ") - الصيغة غالباً مش مدعومة أو الرابط مش متاح من الموبايل."
+                    : !everPlayed && !live
                     ? "الملف مش شغال (" + code + "). غالباً عدد الأجهزة المسموح بيها في اشتراكك اتملى، أو الملف معطّل، أو صيغته مش مدعومة."
                     : "تعذّر تشغيل البث (" + code + "). اتأكد من الإنترنت واضغط إعادة المحاولة.";
             updateOverlays();

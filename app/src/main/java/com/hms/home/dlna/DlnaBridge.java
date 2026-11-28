@@ -11,7 +11,7 @@ public final class DlnaBridge {
         void dlnaPause();
         void dlnaStop();
         void dlnaSeek(long ms);
-        void dlnaSetUri(String uri, String title);
+        void dlnaSetUri(String uri, String title, boolean image);
         void dlnaSetVolume(int percent);
         void dlnaSetMute(boolean mute);
     }

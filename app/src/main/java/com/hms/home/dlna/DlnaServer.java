@@ -412,10 +412,20 @@ public final class DlnaServer {
         DlnaBridge.posMs = 0; DlnaBridge.durMs = 0; DlnaBridge.state = "TRANSITIONING";
         main.post(new Runnable() { @Override public void run() {
             DlnaBridge.Controller c = DlnaBridge.controller;
-            if (c != null) c.dlnaSetUri(uri, titleOf(meta, uri));
+            if (c != null) c.dlnaSetUri(uri, titleOf(meta, uri), isImage(uri, meta));
             else launch(uri, meta);
         } });
         sendEventAll();
+    }
+
+    /** Photos are shown as a picture, not played (DIDL class imageItem, an image/* mime type, or an image file name). */
+    static boolean isImage(String uri, String meta) {
+        String m = meta == null ? "" : meta.toLowerCase(Locale.US);
+        if (m.contains("object.item.imageitem") || m.contains(":image/")) return true;
+        if (m.contains("object.item.videoitem") || m.contains("object.item.audioitem")) return false;
+        String u = uri.toLowerCase(Locale.US);
+        int q = u.indexOf('?'); if (q > 0) u = u.substring(0, q);
+        return u.endsWith(".jpg") || u.endsWith(".jpeg") || u.endsWith(".png") || u.endsWith(".gif") || u.endsWith(".webp") || u.endsWith(".bmp") || u.endsWith(".heic");
     }
 
     private static String titleOf(String meta, String uri) {
@@ -433,6 +443,7 @@ public final class DlnaServer {
         lastLaunch = now; lastLaunchUri = uri;
         Item it = new Item();
         it.type = "dlna"; it.id = uri; it.name = titleOf(meta, uri); it.ext = uri;
+        if (isImage(uri, meta)) it.extra = "image";
         List<Item> l = new ArrayList<>(); l.add(it);
         PlayQueue.set(l, 0);
         Intent i = new Intent(ctx, PlayerActivity.class);
