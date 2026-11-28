@@ -252,4 +252,19 @@ public final class Store {
     /** 0 = server only while a text field is open (saves RAM), 1 = always on, 2 = off. */
     public static int kbMode() { return p.getInt("kb_mode", 0); }
     public static void setKbMode(int m) { p.edit().putInt("kb_mode", m).apply(); }
+
+    // ---- DLNA receiver (cast from the phone) ----
+    public static boolean dlnaOn() { return p.getBoolean("dlna", true); }
+    public static void setDlnaOn(boolean v) { p.edit().putBoolean("dlna", v).apply(); }
+    public static String dlnaName() {
+        String n = p.getString("dlna_name", "");
+        return n.isEmpty() ? "HMS HOME" : n;
+    }
+    public static void setDlnaName(String n) { p.edit().putString("dlna_name", n == null ? "" : n.trim()).apply(); }
+    /** Fixed device id, so phones keep recognising the box after a restart. */
+    public static String dlnaUuid() {
+        String u = p.getString("dlna_uuid", "");
+        if (u.isEmpty()) { u = java.util.UUID.randomUUID().toString(); p.edit().putString("dlna_uuid", u).apply(); }
+        return u;
+    }
 }

@@ -45,6 +45,7 @@ import com.hms.home.data.Net;
 import com.hms.home.data.PlayQueue;
 import com.hms.home.data.Store;
 import com.hms.home.data.Xtream;
+import com.hms.home.dlna.DlnaBridge;
 import com.hms.home.ui.TextAdapter;
 import com.hms.home.ui.Ui;
 import java.util.ArrayList;
@@ -57,7 +58,7 @@ import java.util.concurrent.Callable;
  * gradient controls (top bar / centre transport / seek bar), auto-hide, auto-reconnect, resume,
  * next / previous, speed, audio + subtitle tracks, aspect modes, "next episode" in continue watching.
  */
-public class PlayerActivity extends Activity {
+public class PlayerActivity extends Activity implements DlnaBridge.Controller {
     private ExoPlayer player;
     private PlayerView pv;
     private FrameLayout root, seekBox;
@@ -79,6 +80,9 @@ public class PlayerActivity extends Activity {
     private int retries, aspect;
     private long stableSince, lastSave, pos, dur, pendingResume = C.TIME_UNSET;
     private float speed = 1f;
+    private boolean dlna, dlnaMuted;      // casting from a phone (DLNA): plain URL, no progress saving
+    private int dlnaVol = 100;
+    private String lastDlnaState = "";
     private Net.Task epgTask;
 
     private static final String LIVE_EXT = "m3u8";   // /live/user/pass/id.m3u8
@@ -233,6 +237,54 @@ public class PlayerActivity extends Activity {
         return f;
     }
 
+    // ---------------- DLNA (cast from the phone) ----------------
+    /** A new cast arrived while this screen is already open. */
+    @Override protected void onNewIntent(android.content.Intent in) {
+        super.onNewIntent(in);
+        setIntent(in);
+        if (PlayQueue.items.isEmpty()) return;
+        idx = PlayQueue.index;
+        if (player != null) play(Math.min(idx, PlayQueue.items.size() - 1));   // (if stopped, onStart plays it)
+    }
+
+    @Override public void dlnaPlay() { playNow(); }
+    @Override public void dlnaPause() { if (player != null) player.pause(); }
+    @Override public void dlnaStop() { DlnaBridge.state = "STOPPED"; DlnaBridge.changed(); close(); }
+    @Override public void dlnaSeek(long ms) { if (player != null) { player.seekTo(Math.max(0, ms)); tick(); } }
+    @Override public void dlnaSetUri(String uri, String title) {
+        Item it = new Item();
+        it.type = "dlna"; it.id = uri; it.name = title; it.ext = uri;
+        List<Item> l = new ArrayList<>(); l.add(it);
+        PlayQueue.set(l, 0);
+        if (player != null) play(0);
+    }
+    @Override public void dlnaSetVolume(int percent) { dlnaVol = percent; applyDlnaVolume(); }
+    @Override public void dlnaSetMute(boolean mute) { dlnaMuted = mute; applyDlnaVolume(); }
+    private void applyDlnaVolume() { if (player != null) player.setVolume(dlnaMuted ? 0f : dlnaVol / 100f); }
+
+    /** Tells the phone what we are doing (PLAYING / PAUSED / ...) and where we are. */
+    private void publishDlna() {
+        if (!dlna || player == null) return;
+        String st;
+        int ps = player.getPlaybackState();
+        if (ps == Player.STATE_BUFFERING) st = "TRANSITIONING";
+        else if (ps == Player.STATE_READY) st = player.getPlayWhenReady() ? "PLAYING" : "PAUSED_PLAYBACK";
+        else if (ps == Player.STATE_ENDED) st = "STOPPED";
+        else st = failed ? "STOPPED" : "TRANSITIONING";
+        DlnaBridge.posMs = pos;
+        DlnaBridge.durMs = dur;
+        if (!st.equals(lastDlnaState)) { lastDlnaState = st; DlnaBridge.state = st; DlnaBridge.changed(); }
+    }
+
+    private void releaseDlna() {
+        if (DlnaBridge.controller == this) {
+            DlnaBridge.controller = null;
+            DlnaBridge.state = "STOPPED";
+            DlnaBridge.changed();
+        }
+        lastDlnaState = "";
+    }
+
     // ---------------- lifecycle: one player instance only ----------------
     @Override protected void onStart() {
         super.onStart();
@@ -248,6 +300,7 @@ public class PlayerActivity extends Activity {
         saveNow();
         h.removeCallbacksAndMessages(null);
         if (epgTask != null) epgTask.cancel();
+        releaseDlna();
         releasePlayer();
         super.onStop();
     }
@@ -277,17 +330,20 @@ public class PlayerActivity extends Activity {
         player.setTrackSelectionParameters(player.getTrackSelectionParameters().buildUpon()
                 .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !Store.subsDefault()).build());
         if (speed != 1f) player.setPlaybackSpeed(speed);
+        applyDlnaVolume();
         player.addListener(new Player.Listener() {
             @Override public void onPlaybackStateChanged(int st) {
                 buffering = st == Player.STATE_BUFFERING;
                 if (st == Player.STATE_READY) { message = null; failed = false; }
                 if (st == Player.STATE_ENDED) onEnded();
                 updateOverlays();
+                publishDlna();
             }
             @Override public void onIsPlayingChanged(boolean p) {
                 playIcon.setImageResource(p ? R.drawable.ic_p_pause : R.drawable.ic_p_play);
                 if (p) { everPlayed = true; stableSince = System.currentTimeMillis(); }
                 poke();
+                publishDlna();
             }
             @Override public void onPlayerError(PlaybackException e) { handleError(e); }
             @Override public void onVideoSizeChanged(VideoSize v) {
@@ -310,9 +366,12 @@ public class PlayerActivity extends Activity {
         PlayQueue.index = i;
         cur = PlayQueue.items.get(i);
         live = cur.type.equals("live");
+        dlna = cur.type.equals("dlna");
+        DlnaBridge.controller = dlna ? this : null;
+        lastDlnaState = "";
         retries = 0; everPlayed = false; failed = false; retryPending = false; message = null; pos = 0; dur = 0;
         long start = C.TIME_UNSET;
-        if (!live) { long p = Store.getPosition(cur); if (p > 15000) start = Math.max(0, p - 3000); }
+        if (!live && !dlna) { long p = Store.getPosition(cur); if (p > 15000) start = Math.max(0, p - 3000); }
         ptitle.setText(cur.name);
         pinfo.setText(cur.type.equals("episode") ? cur.extra : "");
         psize.setText("");
@@ -337,7 +396,7 @@ public class PlayerActivity extends Activity {
 
     private void load(Item it, long startMs) {
         if (player == null || it == null) return;
-        player.setMediaItem(MediaItem.fromUri(Xtream.streamUrl(it, LIVE_EXT)), startMs);
+        player.setMediaItem(MediaItem.fromUri(it.type.equals("dlna") ? it.ext : Xtream.streamUrl(it, LIVE_EXT)), startMs);
         player.prepare();
         player.setPlayWhenReady(true);
     }
@@ -388,7 +447,7 @@ public class PlayerActivity extends Activity {
 
     /** Finished: leaves "continue watching"; the next episode takes its place so it shows up there. */
     private void markDone() {
-        if (cur == null) return;
+        if (cur == null || dlna) return;
         Store.saveProgress(cur, Math.max(dur, 1), Math.max(dur, 1));   // > 95 % = removes the entry
         if (idx + 1 < PlayQueue.items.size()) {
             Item n = PlayQueue.items.get(idx + 1);
@@ -397,7 +456,7 @@ public class PlayerActivity extends Activity {
     }
 
     private void saveNow() {
-        if (cur == null || live || dur <= 0) return;
+        if (cur == null || live || dlna || dur <= 0) return;
         if (pos > (long) (dur * 0.95)) markDone();
         else if (pos > 10000) Store.saveProgress(cur, pos, dur);
     }
@@ -410,6 +469,7 @@ public class PlayerActivity extends Activity {
         dur = d == C.TIME_UNSET || d < 0 ? 0 : d;
         long now = System.currentTimeMillis();
         if (player.isPlaying() && now - stableSince > 20000) retries = 0;
+        publishDlna();
         if (!live && now - lastSave > 5000) { lastSave = now; saveNow(); }
         if (show && !live && !scrubbing && dur > 0) {
             timebar.setDuration(dur);
@@ -462,6 +522,7 @@ public class PlayerActivity extends Activity {
     private void close() {
         tick();
         saveNow();
+        releaseDlna();
         finish();
     }
 

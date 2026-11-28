@@ -19,6 +19,7 @@ import com.hms.home.data.Net;
 import com.hms.home.data.Updater;
 import com.hms.home.data.Store;
 import com.hms.home.data.Xtream;
+import com.hms.home.dlna.DlnaService;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
@@ -59,6 +60,7 @@ public class SettingsActivity extends BaseActivity {
     private static final String[][] GROUPS = {
             {"g_iptv", "IPTV", "Accounts, reload data, what shows on the home"},
             {"g_kb", "Phone keyboard & mouse", "Type and control the box from your phone"},
+            {"g_dlna", "Cast from phone (DLNA)", "Show videos, music and photos from your phone on this TV"},
             {"g_player", "Player & display", "Font size, aspect ratio, subtitles"},
             {"g_apps", "Apps & favorites", "Favorite apps and clearing favorites"},
             {"g_sys", "Device & system", "Android settings, default home, clear cache"},
@@ -94,6 +96,11 @@ public class SettingsActivity extends BaseActivity {
                             ? "On  \u2022  open the phone keyboard page and press the mouse button"
                             : "Off  \u2022  press OK, then turn on \"HMS Mouse\" in Accessibility", "mouse"));
                     r.add(new TextAdapter.Row("Reset code", "Creates a new link - the page saved on your phone stops working", "kbreset"));
+                    break;
+                case "g_dlna":
+                    r.add(new TextAdapter.Row("DLNA receiver", Store.dlnaOn() ? "On  \u2022  this box appears as \"" + Store.dlnaName() + "\" in your phone's cast list" : "Off", "dlnaon"));
+                    r.add(new TextAdapter.Row("Device name", Store.dlnaName() + "  (press OK to change)", "dlnaname"));
+                    r.add(new TextAdapter.Row("How to cast", "Phone and TV on the same Wi-Fi  \u2022  press OK for the steps", "dlnahelp"));
                     break;
                 case "g_player":
                     r.add(new TextAdapter.Row("Font size", FONT[Store.fontLevel()] + "  (press OK to change)", "font"));
@@ -152,6 +159,11 @@ public class SettingsActivity extends BaseActivity {
                 try { startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); }
                 catch (Exception e) { Nav.deviceSettings(this); }
                 break;
+            case "dlnaon": Store.setDlnaOn(!Store.dlnaOn()); DlnaService.sync(this); build(); break;
+            case "dlnaname": askDlnaName(); break;
+            case "dlnahelp":
+                showMsg("Cast from phone", "1) Connect the phone to the same Wi-Fi as this TV.\n2) Open a DLNA / cast-capable app (BubbleUPnP, VLC, Gallery, Windows \"Cast to device\"...).\n3) Pick \"" + Store.dlnaName() + "\" from the device list and play.\n\nThe HMS player opens by itself; control it from the phone or the remote.");
+                break;
             case "kbmode": Store.setKbMode((Store.kbMode() + 1) % 3); build(); break;
             case "kbreset":
                 new AlertDialog.Builder(this, R.style.HmsDialog).setTitle("Reset keyboard code?")
@@ -177,6 +189,20 @@ public class SettingsActivity extends BaseActivity {
                 break;
             default: break;
         }
+    }
+
+    private void askDlnaName() {
+        final android.widget.EditText et = new android.widget.EditText(this);
+        et.setText(Store.dlnaName()); et.setSingleLine(true); et.selectAll();
+        et.setTextColor(androidx.core.content.ContextCompat.getColor(this, R.color.h_ink));
+        new AlertDialog.Builder(this, R.style.HmsDialog).setTitle("Device name").setView(et)
+                .setPositiveButton("Save", new DialogInterface.OnClickListener() {
+                    @Override public void onClick(DialogInterface d, int w) {
+                        String n = et.getText().toString().trim();
+                        if (n.isEmpty()) return;
+                        Store.setDlnaName(n); DlnaService.restart(SettingsActivity.this); build();
+                    }
+                }).setNegativeButton("Cancel", null).show();
     }
 
     /** Fixed QR for the phone keyboard page (same link every time, so the page can be saved on the phone). */
